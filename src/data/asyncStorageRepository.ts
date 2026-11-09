@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AppData } from '../domain/types';
 import type { KindkrankRepository } from './repository';
 
-export const STORAGE_KEY = 'kindkrank.v1';
+export const STORAGE_KEY = 'kindkrank.v2';
 
 type KeyValueStore = {
   getItem(key: string): Promise<string | null>;
@@ -12,7 +12,7 @@ type KeyValueStore = {
 function isAppData(value: unknown): value is AppData {
   if (!value || typeof value !== 'object') return false;
   const data = value as AppData;
-  return data.version === 1 && Array.isArray(data.children) && Array.isArray(data.temperatures);
+  return data.version === 2 && Array.isArray(data.children) && Array.isArray(data.temperatures) && Array.isArray(data.caregivers);
 }
 
 export function createAsyncStorageRepository(storage: KeyValueStore = AsyncStorage): KindkrankRepository {

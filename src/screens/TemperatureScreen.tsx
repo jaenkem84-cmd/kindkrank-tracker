@@ -1,77 +1,43 @@
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { TrendChart } from '../components/charts';
+import { TemperatureChart } from '../components/charts/TemperatureChart';
+import { ReminderCard } from '../components/ReminderCard';
 import { Banner, Body, Button, Card, ConfirmDialog, DateTimeFields, Muted, Screen, Segmented, TextField } from '../components/ui';
 import { combineBerlin, dateFieldValue, formatDateTime, timeFieldValue } from '../domain/dates';
-import { REFERENCE_LINES, temperatureBand } from '../domain/fever';
-import { formatCelsius, formatDecimal, parseDecimal } from '../domain/format';
+import { formatCelsius, parseDecimal } from '../domain/format';
 import { createId } from '../domain/ids';
-import { temperaturesForChart } from '../domain/illness';
 import { forChild } from '../domain/select';
 import { MEASUREMENT_METHODS, METHOD_LABELS, type MeasurementMethod, type TemperatureEntry } from '../domain/types';
 import { removeTemperature, saveTemperature } from '../data/mutations';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
-import { guideColors, type Theme } from '../theme/theme';
 
-const guidePalette: Record<(typeof REFERENCE_LINES)[number]['id'], string> = {
-  raised: guideColors.raised,
-  fever: guideColors.fever,
-  high: guideColors.high,
-  care: guideColors.care,
-};
-
-function pointColor(celsius: number, theme: Theme): string {
-  const band = temperatureBand(celsius).id;
-  if (band === 'below') return theme.chart;
-  return guidePalette[band];
-}
-
-export function TemperatureScreen({ now, onEdit }: { now: Date; onEdit: (id: string) => void }) {
+export function TemperatureScreen({ now, onEdit, onAdd }: { now: Date; onEdit: (id: string) => void; onAdd: () => void }) {
   const theme = useTheme();
+  const [days, setDays] = useState(5);
+  const [stepHours, setStepHours] = useState(6);
   const { data, activeChild } = useStore();
   if (!data || !activeChild) return <Body>Lege zuerst ein Kind an.</Body>;
   const own = forChild(data.temperatures, activeChild.id);
-  const weeks = data.settings.chartWindowWeeks;
-  const chart = temperaturesForChart(own, now, weeks);
-  const points = chart.map((entry) => ({ x: new Date(entry.timestamp).getTime(), y: entry.celsius }));
   const listed = [...own].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  const reminder = data.reminders.find((item) => item.childId === activeChild.id && item.kind === 'temperature');
 
   return (
     <View style={{ gap: 14 }}>
-      <Muted>
-        Diagramm: aktuelle Krankheitsphase, höchstens die letzten {weeks} {weeks === 1 ? 'Woche' : 'Wochen'}. Eine Pause
-        von mehr als 48 Stunden beginnt eine neue Phase. Den Zeitraum stellst du unter Mehr ein.
-      </Muted>
+      <Button label="Temperatur eintragen" onPress={onAdd} />
       <Card>
-        {points.length === 0 ? (
-          <Body>In diesem Zeitraum gibt es noch keine Messung.</Body>
-        ) : (
-          <TrendChart
-            points={points}
-            domain={{ min: 36.8, max: 40.7 }}
-            guides={REFERENCE_LINES.map((line) => ({
-              y: line.celsius,
-              color: guidePalette[line.id],
-              label: line.label,
-            }))}
-            formatX={(x) => {
-              const text = formatDateTime(new Date(x));
-              return `${text.slice(0, 5)} ${text.slice(11)}`;
-            }}
-            formatY={(y) => formatDecimal(y, y % 1 === 0 ? 0 : 1)}
-            colorForY={(y) => pointColor(y, theme)}
-          />
-        )}
-        <View style={{ gap: 4 }}>
-          {REFERENCE_LINES.map((line) => (
-            <Text key={line.id} style={{ color: guidePalette[line.id], fontSize: 14 }}>
-              {formatDecimal(line.celsius, line.celsius % 1 === 0 ? 0 : 1)} {line.label}
-            </Text>
-          ))}
-          <Muted>Nur Orientierung, keine Diagnose.</Muted>
-        </View>
+        <TemperatureChart
+          entries={own}
+          doses={forChild(data.doses, activeChild.id)}
+          medications={forChild(data.medications, activeChild.id)}
+          now={now}
+          days={days}
+          stepHours={stepHours}
+          onDays={setDays}
+          onStep={setStepHours}
+        />
       </Card>
+      <ReminderCard childId={activeChild.id} kind="temperature" reminder={reminder} />
       {listed.map((entry) => (
         <Pressable key={entry.id} accessibilityRole="button" onPress={() => onEdit(entry.id)}>
           <Card>
@@ -160,7 +126,7 @@ export function TemperatureForm({ entryId, onDone }: { entryId?: string; onDone:
       />
       <DateTimeFields date={date} time={time} onChange={(nextDate, nextTime) => { setDate(nextDate); setTime(nextTime); }} />
       <TextField label="Notiz" value={note} onChangeText={setNote} placeholder="optional" />
-      <Muted>Standard ist {METHOD_LABELS[data?.settings.defaultMethod ?? 'rektal']}. Das änderst du unter Mehr.</Muted>
+      <Muted>Standard-Messart ist {METHOD_LABELS[data?.settings.defaultMethod ?? 'rektal']}. Das änderst du in den Einstellungen.</Muted>
     </Screen>
   );
 }

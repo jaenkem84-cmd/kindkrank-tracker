@@ -1,96 +1,192 @@
+import { zonedDateTime } from '../domain/dates';
 import { createId } from '../domain/ids';
-import type { AppData, Child, DoseEntry, GrowthEntry, Medication, TemperatureEntry } from '../domain/types';
+import type { AppData, Caregiver, Child, DoseEntry, GrowthEntry, Medication, TemperatureEntry } from '../domain/types';
 
-function hoursAgo(now: Date, hours: number): string {
-  return new Date(now.getTime() - hours * 3_600_000).toISOString();
+function at(day: string, time: string): string {
+  const [date, month, year] = day.split('.').map(Number);
+  const [hour, minute] = time.split(':').map(Number);
+  return zonedDateTime({ year, month, day: date, hour, minute }).toISOString();
 }
 
+const TEMPERATURES: [string, string, number][] = [
+  ['03.11.2026', '23:40', 40.7],
+  ['04.11.2026', '08:05', 38.4],
+  ['04.11.2026', '13:29', 40.3],
+  ['04.11.2026', '17:41', 39.0],
+  ['04.11.2026', '19:18', 40.0],
+  ['05.11.2026', '00:30', 38.3],
+  ['05.11.2026', '07:18', 40.0],
+  ['05.11.2026', '12:01', 38.7],
+  ['05.11.2026', '14:19', 40.5],
+  ['05.11.2026', '18:41', 36.8],
+  ['06.11.2026', '07:33', 39.7],
+  ['06.11.2026', '15:47', 39.9],
+  ['06.11.2026', '19:48', 37.0],
+  ['06.11.2026', '20:28', 37.3],
+  ['07.11.2026', '07:36', 39.7],
+  ['07.11.2026', '08:15', 39.0],
+  ['07.11.2026', '11:10', 39.2],
+  ['07.11.2026', '13:09', 40.1],
+  ['07.11.2026', '16:53', 37.0],
+  ['07.11.2026', '18:56', 36.8],
+  ['08.11.2026', '08:10', 40.0],
+  ['08.11.2026', '10:55', 37.3],
+  ['08.11.2026', '13:36', 36.0],
+  ['08.11.2026', '14:45', 36.5],
+  ['08.11.2026', '16:52', 37.6],
+  ['08.11.2026', '18:46', 38.4],
+  ['09.11.2026', '00:00', 38.2],
+  ['09.11.2026', '18:54', 37.4],
+];
+
+const HEIGHT: [string, number][] = [
+  ['15.01.2025', 50.0],
+  ['17.01.2025', 50.0],
+  ['10.02.2025', 52.0],
+  ['25.04.2025', 59.5],
+  ['25.07.2025', 65.6],
+  ['20.08.2025', 68.2],
+  ['11.10.2025', 71.0],
+  ['16.01.2026', 72.0],
+  ['23.10.2026', 85.0],
+];
+
+const HEAD: [string, number][] = [
+  ['15.01.2025', 35.5],
+  ['17.01.2025', 35.5],
+  ['10.02.2025', 36.5],
+  ['25.04.2025', 40.5],
+  ['25.07.2025', 43.4],
+  ['16.01.2026', 45.5],
+];
+
+const WEIGHT: [string, number][] = [
+  ['15.01.2025', 3.34],
+  ['17.01.2025', 3.0],
+  ['10.02.2025', 3.91],
+  ['25.04.2025', 6.3],
+  ['25.07.2025', 7.5],
+  ['16.01.2026', 8.68],
+];
+
 /**
- * One clearly marked example child so the fever chart and dose cards are visible
- * the first time the app opens. Everything here can be deleted.
+ * Anna, girl, born 15.01.2025, with the recorded measurements.
+ * Medication intervals are example values entered like a parent would, not recommendations.
  */
 export function createSeedData(now: Date): AppData {
   const anna: Child = {
     id: createId('kind'),
     name: 'Anna',
     birthDate: '2025-01-15',
+    sex: 'maedchen',
+    frameColor: '#E85A9B',
     isExample: true,
     createdAt: now.toISOString(),
   };
-
-  const paracetamol: Medication = {
-    id: createId('med'),
-    childId: anna.id,
-    name: 'Paracetamol-Zäpfchen (Beispiel)',
-    doseText: '1 Zäpfchen',
-    minIntervalHours: 6,
-    maxDosesPer24h: 4,
-    isExample: true,
+  const papa: Caregiver = {
+    id: createId('person'),
+    name: 'Papa',
+    role: 'Vater',
+    isOwner: true,
   };
   const ibuprofen: Medication = {
     id: createId('med'),
     childId: anna.id,
-    name: 'Ibuprofen-Saft (Beispiel)',
+    name: 'Ibuprofen-Zäpfchen',
+    doseText: '60 mg',
+    minIntervalHours: 6,
+    maxDosesPer24h: 4,
+    isExample: true,
+  };
+  const paracetamol: Medication = {
+    id: createId('med'),
+    childId: anna.id,
+    name: 'Paracetamol-Zäpfchen',
+    doseText: '125 mg',
+    minIntervalHours: 6,
+    maxDosesPer24h: 4,
+    isExample: true,
+  };
+  const prospan: Medication = {
+    id: createId('med'),
+    childId: anna.id,
+    name: 'Prospan Hustensaft (Kinder)',
     doseText: '2,5 ml',
     minIntervalHours: 6,
     maxDosesPer24h: 3,
     isExample: true,
   };
 
-  const temperatures: TemperatureEntry[] = [
-    [50, 38.4],
-    [44, 39.1],
-    [36, 38.7],
-    [26, 37.9],
-    [18, 38.2],
-    [8, 37.6],
-    [2, 37.4],
-  ].map(([hours, celsius]) => ({
+  const temperatures: TemperatureEntry[] = TEMPERATURES.map(([day, time, celsius]) => ({
     id: createId('temp'),
     childId: anna.id,
-    timestamp: hoursAgo(now, hours),
+    timestamp: at(day, time),
     celsius,
-    method: 'rektal' as const,
+    method: 'rektal',
     note: '',
     isExample: true,
   }));
 
-  const doses: DoseEntry[] = [14, 7].map((hours) => ({
+  const dose = (medication: Medication, day: string, time: string): DoseEntry => ({
     id: createId('gabe'),
     childId: anna.id,
-    medicationId: paracetamol.id,
-    timestamp: hoursAgo(now, hours),
-    givenBy: 'Mama (Beispiel)',
-    doseText: paracetamol.doseText,
+    medicationId: medication.id,
+    timestamp: at(day, time),
+    givenBy: 'Papa',
+    doseText: medication.doseText,
     note: '',
     overridden: false,
     isExample: true,
-  }));
+  });
 
-  const growth: GrowthEntry[] = [
-    { timestamp: '2025-01-20T10:00:00.000Z', weightKg: 3.4, heightCm: 51, headCm: 35 },
-    { timestamp: '2025-07-15T10:00:00.000Z', weightKg: 7.8, heightCm: 68, headCm: 43 },
-    { timestamp: '2026-01-15T10:00:00.000Z', weightKg: 9.4, heightCm: 78, headCm: 46 },
-    { timestamp: hoursAgo(now, 48), weightKg: 11.2, heightCm: 84, headCm: 47.5 },
-    { timestamp: hoursAgo(now, 6), weightKg: 10.6 },
-  ].map((entry) => ({
-    id: createId('wuchs'),
-    childId: anna.id,
-    isExample: true,
-    ...entry,
-  }));
+  const doses: DoseEntry[] = [
+    ...[
+      ['03.11.2026', '23:45'],
+      ['04.11.2026', '19:19'],
+      ['05.11.2026', '14:21'],
+      ['06.11.2026', '15:48'],
+      ['07.11.2026', '13:10'],
+      ['08.11.2026', '08:11'],
+    ].map(([day, time]) => dose(ibuprofen, day, time)),
+    ...[
+      ['04.11.2026', '13:30'],
+      ['05.11.2026', '07:19'],
+      ['06.11.2026', '07:37'],
+      ['07.11.2026', '07:38'],
+      ['08.11.2026', '18:46'],
+    ].map(([day, time]) => dose(paracetamol, day, time)),
+    dose(prospan, '04.11.2026', '09:30'),
+  ];
+
+  const byDay = new Map<string, GrowthEntry>();
+  const growthOf = (day: string) => {
+    const existing = byDay.get(day);
+    if (existing) return existing;
+    const created: GrowthEntry = {
+      id: createId('wuchs'),
+      childId: anna.id,
+      timestamp: at(day, '12:00'),
+      isExample: true,
+    };
+    byDay.set(day, created);
+    return created;
+  };
+  for (const [day, heightCm] of HEIGHT) growthOf(day).heightCm = heightCm;
+  for (const [day, headCm] of HEAD) growthOf(day).headCm = headCm;
+  for (const [day, weightKg] of WEIGHT) growthOf(day).weightKg = weightKg;
 
   return {
-    version: 1,
+    version: 2,
     children: [anna],
+    caregivers: [papa],
     temperatures,
-    medications: [paracetamol, ibuprofen],
+    medications: [ibuprofen, paracetamol, prospan],
     doses,
-    growth,
+    growth: [...byDay.values()],
+    reminders: [],
     settings: {
-      chartWindowWeeks: 5,
       defaultMethod: 'rektal',
-      defaultGivenBy: '',
+      defaultGivenBy: 'Papa',
       activeChildId: anna.id,
       appearance: 'system',
     },
@@ -99,16 +195,17 @@ export function createSeedData(now: Date): AppData {
 
 export function deleteExampleData(data: AppData): AppData {
   const exampleIds = new Set(data.children.filter((child) => child.isExample).map((child) => child.id));
-  const dropChild = (childId: string, isExample: boolean) => exampleIds.has(childId) || isExample;
+  const drop = (childId: string, isExample: boolean) => exampleIds.has(childId) || isExample;
   const children = data.children.filter((child) => !child.isExample);
   const activeStillThere = children.some((child) => child.id === data.settings.activeChildId);
   return {
     ...data,
     children,
-    temperatures: data.temperatures.filter((entry) => !dropChild(entry.childId, entry.isExample)),
-    medications: data.medications.filter((entry) => !dropChild(entry.childId, entry.isExample)),
-    doses: data.doses.filter((entry) => !dropChild(entry.childId, entry.isExample)),
-    growth: data.growth.filter((entry) => !dropChild(entry.childId, entry.isExample)),
+    temperatures: data.temperatures.filter((entry) => !drop(entry.childId, entry.isExample)),
+    medications: data.medications.filter((entry) => !drop(entry.childId, entry.isExample)),
+    doses: data.doses.filter((entry) => !drop(entry.childId, entry.isExample)),
+    growth: data.growth.filter((entry) => !drop(entry.childId, entry.isExample)),
+    reminders: data.reminders.filter((entry) => !exampleIds.has(entry.childId)),
     settings: {
       ...data.settings,
       activeChildId: activeStillThere ? data.settings.activeChildId : (children[0]?.id ?? null),
@@ -117,16 +214,14 @@ export function deleteExampleData(data: AppData): AppData {
 }
 
 export function keepExampleChild(data: AppData, childId: string): AppData {
+  const clear = <T extends { childId: string; isExample: boolean }>(items: T[]) =>
+    items.map((entry) => (entry.childId === childId ? { ...entry, isExample: false } : entry));
   return {
     ...data,
     children: data.children.map((child) => (child.id === childId ? { ...child, isExample: false } : child)),
-    temperatures: data.temperatures.map((entry) =>
-      entry.childId === childId ? { ...entry, isExample: false } : entry,
-    ),
-    medications: data.medications.map((entry) =>
-      entry.childId === childId ? { ...entry, isExample: false } : entry,
-    ),
-    doses: data.doses.map((entry) => (entry.childId === childId ? { ...entry, isExample: false } : entry)),
-    growth: data.growth.map((entry) => (entry.childId === childId ? { ...entry, isExample: false } : entry)),
+    temperatures: clear(data.temperatures),
+    medications: clear(data.medications),
+    doses: clear(data.doses),
+    growth: clear(data.growth),
   };
 }

@@ -1,40 +1,53 @@
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { TrendChart } from '../components/charts';
+import { GrowthChart } from '../components/charts/GrowthChart';
 import { Banner, Body, Button, Card, ConfirmDialog, DateTimeFields, Muted, Screen, TextField } from '../components/ui';
-import { ageMonths, combineBerlin, dateFieldValue, formatDateTime, timeFieldValue } from '../domain/dates';
+import { combineBerlin, dateFieldValue, formatDateTime, timeFieldValue } from '../domain/dates';
 import { formatDecimal, parseDecimal } from '../domain/format';
 import { createId } from '../domain/ids';
 import { forChild } from '../domain/select';
 import type { GrowthEntry } from '../domain/types';
 import { removeGrowth, saveGrowth } from '../data/mutations';
 import { useStore } from '../state/store';
+import type { GrowthMetric } from '../domain/who/who';
 import { useTheme } from '../theme/ThemeProvider';
 
-function formatAge(months: number): string {
-  if (months < 24) return `${Math.round(months)} Mon.`;
-  const years = Math.floor(months / 12);
-  const rest = Math.round(months % 12);
-  return rest ? `${years} J. ${rest} M.` : `${years} J.`;
-}
+const TITLES: Record<GrowthMetric, string> = { weight: 'Gewicht', height: 'Größe', head: 'Kopfumfang' };
 
-export function GrowthScreen({ onEdit }: { onEdit: (id: string) => void }) {
+export function GrowthScreen({
+  metric,
+  onEdit,
+  onAdd,
+}: {
+  metric: GrowthMetric;
+  onEdit: (id: string) => void;
+  onAdd: () => void;
+}) {
   const theme = useTheme();
+  const [months, setMonths] = useState(24);
+  const [labelEvery, setLabelEvery] = useState(4);
   const { data, activeChild } = useStore();
   if (!data || !activeChild) return <Body>Lege zuerst ein Kind an.</Body>;
   const entries = forChild(data.growth, activeChild.id).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  const series = (pick: (entry: GrowthEntry) => number | undefined) =>
-    entries
-      .filter((entry) => pick(entry) !== undefined)
-      .map((entry) => ({ x: ageMonths(activeChild.birthDate, new Date(entry.timestamp)), y: pick(entry) as number }));
+  const field = metric === 'weight' ? 'weightKg' : metric === 'height' ? 'heightCm' : 'headCm';
+  const listed = [...entries].reverse().filter((entry) => entry[field] !== undefined);
 
   return (
     <View style={{ gap: 14 }}>
-      <Muted>Eigene Messwerte über das Alter. Keine Perzentilkurve und keine Bewertung.</Muted>
-      <ChartCard title="Gewicht" unit="kg" points={series((entry) => entry.weightKg)} />
-      <ChartCard title="Größe" unit="cm" points={series((entry) => entry.heightCm)} />
-      <ChartCard title="Kopfumfang" unit="cm" points={series((entry) => entry.headCm)} />
-      {[...entries].reverse().map((entry) => (
+      <Button label={`${TITLES[metric]} eintragen`} onPress={onAdd} />
+      <Card>
+        <GrowthChart
+          metric={metric}
+          sex={activeChild.sex}
+          birthDate={activeChild.birthDate}
+          entries={entries}
+          months={months}
+          labelEvery={labelEvery}
+          onMonths={setMonths}
+          onLabelEvery={setLabelEvery}
+        />
+      </Card>
+      {listed.map((entry) => (
         <Pressable key={entry.id} accessibilityRole="button" onPress={() => onEdit(entry.id)}>
           <Card>
             <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>
@@ -42,7 +55,7 @@ export function GrowthScreen({ onEdit }: { onEdit: (id: string) => void }) {
             </Text>
             <Body>
               {[
-                entry.weightKg !== undefined ? `${formatDecimal(entry.weightKg, 1)} kg` : null,
+                entry.weightKg !== undefined ? `${formatDecimal(entry.weightKg, 2)} kg` : null,
                 entry.heightCm !== undefined ? `${formatDecimal(entry.heightCm, 1)} cm Größe` : null,
                 entry.headCm !== undefined ? `${formatDecimal(entry.headCm, 1)} cm Kopf` : null,
               ]
@@ -54,19 +67,6 @@ export function GrowthScreen({ onEdit }: { onEdit: (id: string) => void }) {
         </Pressable>
       ))}
     </View>
-  );
-}
-
-function ChartCard({ title, unit, points }: { title: string; unit: string; points: { x: number; y: number }[] }) {
-  return (
-    <Card>
-      <Body>{title}</Body>
-      {points.length === 0 ? (
-        <Muted>Noch keine Werte.</Muted>
-      ) : (
-        <TrendChart points={points} formatX={formatAge} formatY={(value) => `${formatDecimal(value, 1)} ${unit}`} />
-      )}
-    </Card>
   );
 }
 

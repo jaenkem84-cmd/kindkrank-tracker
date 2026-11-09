@@ -9,12 +9,14 @@ import type { Theme } from '../theme/theme';
 export function Screen({
   title,
   onBack,
+  right,
   children,
   footer,
   dialog,
 }: {
   title: string;
   onBack?: () => void;
+  right?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
   dialog?: ReactNode;
@@ -31,7 +33,10 @@ export function Screen({
         ) : (
           <View style={styles.back} />
         )}
-        <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <Text style={[styles.title, { color: theme.text, flex: 1 }]}>{title}</Text>
+          {right}
+        </View>
       </View>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {children}

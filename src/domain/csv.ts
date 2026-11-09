@@ -29,11 +29,13 @@ function flag(value: boolean): string {
 
 export function buildExportFiles(data: AppData): CsvFile[] {
   const kinder = toCsv(
-    ['id', 'name', 'geburtsdatum', 'beispiel', 'angelegt_am'],
+    ['id', 'name', 'geburtsdatum', 'geschlecht', 'rahmenfarbe', 'beispiel', 'angelegt_am'],
     data.children.map((child) => [
       child.id,
       child.name,
       child.birthDate,
+      child.sex,
+      child.frameColor,
       flag(child.isExample),
       stamp(child.createdAt),
     ]),
@@ -99,11 +101,33 @@ export function buildExportFiles(data: AppData): CsvFile[] {
     ]),
   );
 
+  const familie = toCsv(
+    ['id', 'name', 'rolle', 'ist_konto'],
+    data.caregivers.map((person) => [person.id, person.name, person.role, flag(person.isOwner)]),
+  );
+  const erinnerungen = toCsv(
+    ['id', 'kind_id', 'kind', 'art', 'medikament_id', 'medikament', 'aktiv', 'modus', 'uhrzeiten', 'stunden_danach'],
+    data.reminders.map((reminder) => [
+      reminder.id,
+      reminder.childId,
+      childName(data, reminder.childId),
+      reminder.kind,
+      reminder.medicationId ?? '',
+      reminder.medicationId ? medName(reminder.medicationId) : '',
+      flag(reminder.enabled),
+      reminder.mode,
+      reminder.times.join(' '),
+      String(reminder.hoursAfter).replace('.', ','),
+    ]),
+  );
+
   return [
     { name: 'kinder.csv', contents: kinder },
     { name: 'temperatur.csv', contents: temperatur },
     { name: 'medikamente.csv', contents: medikamente },
     { name: 'gaben.csv', contents: gaben },
     { name: 'wachstum.csv', contents: wachstum },
+    { name: 'familie.csv', contents: familie },
+    { name: 'erinnerungen.csv', contents: erinnerungen },
   ];
 }

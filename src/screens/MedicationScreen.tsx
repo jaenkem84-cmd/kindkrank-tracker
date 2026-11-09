@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
+import { ReminderCard } from '../components/ReminderCard';
 import { Banner, Body, Button, Card, ConfirmDialog, DateTimeFields, Muted, Screen, TextField } from '../components/ui';
 import { combineBerlin, dateFieldValue, formatDateTime, formatTime, sameBerlinDay, timeFieldValue } from '../domain/dates';
 import { formatHours, formatSince, parseDecimal } from '../domain/format';
@@ -36,7 +37,17 @@ function warningText(name: string, assessment: DoseAssessment): string | null {
   return `${name}: ${parts.join(' ')} Diese Grenzen hast du selbst eingetragen.`;
 }
 
-export function MedicationScreen({ now, onDose, onEdit }: { now: Date; onDose: (id: string) => void; onEdit: (id: string) => void }) {
+export function MedicationScreen({
+  now,
+  onDose,
+  onEdit,
+  onAdd,
+}: {
+  now: Date;
+  onDose: (id: string) => void;
+  onEdit: (id: string) => void;
+  onAdd: () => void;
+}) {
   const theme = useTheme();
   const { data, activeChild } = useStore();
   if (!data || !activeChild) return <Body>Lege zuerst ein Kind an.</Body>;
@@ -44,6 +55,7 @@ export function MedicationScreen({ now, onDose, onEdit }: { now: Date; onDose: (
   const doses = forChild(data.doses, activeChild.id);
   return (
     <View style={{ gap: 14 }}>
+      <Button label="Medikament anlegen" onPress={onAdd} />
       <Muted>{MEDICAL_DISCLAIMER}</Muted>
       {meds.length === 0 ? <Body>Noch kein Medikament. Trag Name, Dosis, Abstand und Maximum selbst ein.</Body> : null}
       {meds.map((medication) => {
@@ -68,7 +80,14 @@ export function MedicationScreen({ now, onDose, onEdit }: { now: Date; onDose: (
             </Body>
             <Body>{limitsText(assessment, now)}</Body>
             <Body>{`Heute: ${assessment.countToday} · letzte 24h: ${assessment.count24h} von ${medication.maxDosesPer24h}`}</Body>
+            {medication.isExample ? <Muted>Abstand und Maximum sind Beispieleinträge, keine Empfehlung.</Muted> : null}
             {assessment.count24h >= medication.maxDosesPer24h ? <Banner tone="warning">Maximum für 24 Stunden erreicht.</Banner> : null}
+            <ReminderCard
+              childId={activeChild.id}
+              kind="medication"
+              medicationId={medication.id}
+              reminder={data.reminders.find((item) => item.medicationId === medication.id)}
+            />
             <Button label="Gabe eintragen" onPress={() => onDose(medication.id)} />
             <Button label="Medikament ändern" variant="secondary" onPress={() => onEdit(medication.id)} />
           </Card>

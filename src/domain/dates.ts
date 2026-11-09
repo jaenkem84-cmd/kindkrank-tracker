@@ -181,6 +181,61 @@ export function shiftMinutes(date: Date, minutes: number): Date {
   return new Date(date.getTime() + minutes * 60_000);
 }
 
+export function startOfBerlinDay(date: Date): Date {
+  const parts = berlinParts(date);
+  return zonedDateTime({ year: parts.year, month: parts.month, day: parts.day, hour: 0, minute: 0 });
+}
+
+export function endOfBerlinDay(date: Date): Date {
+  const next = addCalendarDays(date, 1);
+  return new Date(zonedDateTime({ ...next, hour: 0, minute: 0 }).getTime() - 1);
+}
+
+export function shiftBerlinDays(date: Date, days: number): Date {
+  const shifted = addCalendarDays(date, days);
+  return zonedDateTime({ ...shifted, hour: 12, minute: 0 });
+}
+
+const WEEKDAYS = ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.'];
+const MONTHS = ['Jan.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.', 'Sep.', 'Okt.', 'Nov.', 'Dez.'];
+
+export function weekdayIndex(date: Date): number {
+  const label = new Intl.DateTimeFormat('en-US', { timeZone: TIME_ZONE, weekday: 'short' }).format(date);
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(label);
+}
+
+export function formatDayHeading(date: Date): string {
+  const parts = berlinParts(date);
+  const weekday = WEEKDAYS[weekdayIndex(date)] ?? '';
+  return `${weekday}, ${parts.day}. ${MONTHS[parts.month - 1]}`;
+}
+
+export function formatShortDay(date: Date): string {
+  const parts = berlinParts(date);
+  const weekday = (WEEKDAYS[weekdayIndex(date)] ?? '').replace('.', '');
+  return `${weekday} ${parts.day}.${parts.month}.`;
+}
+
+/** Whole weeks and leftover days between the Berlin calendar dates. */
+export function ageWeeksDays(birthDateIso: string, now: Date): { weeks: number; days: number } | null {
+  const match = birthDateIso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const birth = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  const today = berlinParts(now);
+  const end = Date.UTC(today.year, today.month - 1, today.day);
+  const diff = Math.round((end - birth) / 86_400_000);
+  if (diff < 0) return { weeks: 0, days: 0 };
+  return { weeks: Math.floor(diff / 7), days: diff % 7 };
+}
+
+export function formatAgeWeeks(birthDateIso: string, now: Date): string {
+  const age = ageWeeksDays(birthDateIso, now);
+  if (!age) return '';
+  const weeks = age.weeks === 1 ? '1 Woche' : `${age.weeks} Wochen`;
+  const days = age.days === 1 ? '1 Tag' : `${age.days} Tage`;
+  return `${weeks} ${days}`;
+}
+
 /** Approximate age in months, using the Berlin calendar date of `at`. */
 export function ageMonths(birthDateIso: string, at: Date): number {
   const match = birthDateIso.match(/^(\d{4})-(\d{2})-(\d{2})$/);

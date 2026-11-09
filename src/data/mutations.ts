@@ -1,4 +1,14 @@
-import type { AppData, Child, DoseEntry, GrowthEntry, Medication, Settings, TemperatureEntry } from '../domain/types';
+import type {
+  AppData,
+  Caregiver,
+  Child,
+  DoseEntry,
+  GrowthEntry,
+  Medication,
+  Reminder,
+  Settings,
+  TemperatureEntry,
+} from '../domain/types';
 
 function replaceById<T extends { id: string }>(items: T[], item: T): T[] {
   const index = items.findIndex((entry) => entry.id === item.id);
@@ -29,6 +39,7 @@ export function removeChild(data: AppData, childId: string): AppData {
     medications: data.medications.filter((entry) => entry.childId !== childId),
     doses: data.doses.filter((entry) => entry.childId !== childId && !medicationIds.has(entry.medicationId)),
     growth: data.growth.filter((entry) => entry.childId !== childId),
+    reminders: data.reminders.filter((entry) => entry.childId !== childId),
     settings: { ...data.settings, activeChildId: activeAfter(data, children) },
   };
 }
@@ -50,6 +61,7 @@ export function removeMedication(data: AppData, id: string): AppData {
     ...data,
     medications: data.medications.filter((entry) => entry.id !== id),
     doses: data.doses.filter((entry) => entry.medicationId !== id),
+    reminders: data.reminders.filter((entry) => entry.medicationId !== id),
   };
 }
 
@@ -71,4 +83,20 @@ export function removeGrowth(data: AppData, id: string): AppData {
 
 export function saveSettings(data: AppData, settings: Settings): AppData {
   return { ...data, settings };
+}
+
+export function saveCaregiver(data: AppData, caregiver: Caregiver): AppData {
+  return { ...data, caregivers: replaceById(data.caregivers, caregiver) };
+}
+
+export function removeCaregiver(data: AppData, id: string): AppData {
+  return { ...data, caregivers: data.caregivers.filter((entry) => entry.isOwner || entry.id !== id) };
+}
+
+export function saveReminder(data: AppData, reminder: Reminder): AppData {
+  return { ...data, reminders: replaceById(data.reminders, reminder) };
+}
+
+export function removeReminder(data: AppData, id: string): AppData {
+  return { ...data, reminders: data.reminders.filter((entry) => entry.id !== id) };
 }

@@ -4,13 +4,28 @@ export type MeasurementMethod = (typeof MEASUREMENT_METHODS)[number];
 
 export type Appearance = 'system' | 'light' | 'dark';
 
+export type Sex = 'maedchen' | 'junge';
+
+export const FRAME_COLORS = ['#3B82F6', '#E85A9B', '#F5A524', '#3DDC97', '#EF4444', '#8B5CF6'] as const;
+
+export const CAREGIVER_ROLES = ['Vater', 'Mutter', 'Oma', 'Opa', 'Andere'] as const;
+
 export type Child = {
   id: string;
   name: string;
   /** ISO date YYYY-MM-DD */
   birthDate: string;
+  sex: Sex;
+  frameColor: string;
   isExample: boolean;
   createdAt: string;
+};
+
+export type Caregiver = {
+  id: string;
+  name: string;
+  role: string;
+  isOwner: boolean;
 };
 
 export type TemperatureEntry = {
@@ -58,9 +73,22 @@ export type GrowthEntry = {
   isExample: boolean;
 };
 
+export type ReminderMode = 'daily' | 'after';
+
+export type Reminder = {
+  id: string;
+  childId: string;
+  kind: 'temperature' | 'medication';
+  medicationId?: string;
+  enabled: boolean;
+  mode: ReminderMode;
+  /** Local times HH:MM. The phone clock should be Europe/Berlin. */
+  times: string[];
+  /** Used when mode is "after". Chosen by the parent, never suggested as a dose interval. */
+  hoursAfter: number;
+};
+
 export type Settings = {
-  /** How many weeks of measurements the fever chart may include. Default 5. */
-  chartWindowWeeks: number;
   defaultMethod: MeasurementMethod;
   defaultGivenBy: string;
   activeChildId: string | null;
@@ -68,12 +96,14 @@ export type Settings = {
 };
 
 export type AppData = {
-  version: 1;
+  version: 2;
   children: Child[];
+  caregivers: Caregiver[];
   temperatures: TemperatureEntry[];
   medications: Medication[];
   doses: DoseEntry[];
   growth: GrowthEntry[];
+  reminders: Reminder[];
   settings: Settings;
 };
 
@@ -86,4 +116,4 @@ export const METHOD_LABELS: Record<MeasurementMethod, string> = {
 };
 
 export const MEDICAL_DISCLAIMER =
-  'Keine Diagnose und keine Dosierungsempfehlung. Die Linien im Diagramm sind nur eine Orientierung. Abstände und Höchstmengen trägst du selbst ein, so wie sie auf dem Beipackzettel stehen oder von Ärztin, Arzt oder Apotheke genannt wurden.';
+  'Keine Diagnose und keine Dosierungsempfehlung. Die Linien im Fieberdiagramm sind nur eine Orientierung. Abstände, Höchstmengen und Erinnerungen trägst du selbst ein.';

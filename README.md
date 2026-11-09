@@ -4,19 +4,19 @@ Eine ruhige Android-App für Eltern, die ein krankes Kind im Blick behalten: Tem
 
 **Keine Diagnose und keine Dosierungsempfehlung.** Die Linien im Fieberdiagramm sind nur eine Orientierung. Abstände und Höchstmengen trägst du selbst ein, so wie sie auf dem Beipackzettel stehen oder von Ärztin, Arzt oder Apotheke genannt wurden. Die App rechnet keine Dosis aus.
 
-Technisch: Expo SDK 58, React Native, TypeScript. Der erste Start legt Beispieldaten an: das Kind **Anna, geboren 15.01.2025**, klar als Beispiel markiert, inklusive ein paar Messungen und Gaben. Alles davon lässt sich auf dem Startbildschirm oder unter Mehr löschen.
+Technisch: Expo SDK 58, React Native, TypeScript. Der erste Start legt Beispieldaten an: **Anna, Mädchen, geboren 15.01.2025**, klar als Beispiel markiert, mit den erfassten Messwerten für Temperatur, Größe, Kopfumfang, Gewicht und die genannten Gaben. Löschen geht in den Einstellungen.
 
 ## Funktionen
 
 1. Mehrere Kinder (Name, Geburtsdatum).
-2. Temperatur mit Zeitpunkt (Standard: jetzt, plus „vor 15 Minuten“ und weitere Schnellwahl), Messart (Standard rektal, außerdem axillar, oral, Ohr, Stirn) und Notiz. Das Diagramm zeigt die aktuelle Krankheitsphase (neue Phase nach mehr als 48 Stunden Pause), höchstens die letzten 5 Wochen. Die Wochenzahl steht unter Mehr (1 bis 12). Orientierungslinien: 37,6 erhöhte Temperatur, 38,5 Fieber, 39 hohes Fieber, 40 ärztlich abklären.
+2. Temperatur mit Zeitpunkt, Messart (Standard rektal) und Notiz. Das Diagramm steht direkt auf der Seite Temperatur. Standard sind die letzten 5 Tage, umschaltbar auf 7 oder 14. Mitternacht ist eine kräftige Gitterlinie, dazwischen 3, 6 oder 12 Stunden. Orientierungslinien: 37,6 / 38,5 / 39 / 40. Gaben liegen als kurze Striche auf der Zeitachse. Ein Punkt lässt sich antippen.
 3. Medikamente, die du selbst anlegst: Name, Dosis als Text, Mindestabstand in Stunden, höchstens so viele Gaben in 24 Stunden. Eine Gabe merkt sich Zeitpunkt, gebende Person und die letzte Dosis dieses Medikaments. Pro Medikament siehst du die letzte Gabe, die vergangene Zeit, „nächste Gabe frühestens um HH:MM“ und „Heute / letzte 24h: X von Y“. Zu früh oder über dem Maximum erscheint eine deutliche Warnung. Speichern geht danach nur mit Bestätigung.
-4. Gewicht (kg), Größe (cm) und Kopfumfang (cm) mit einer einfachen Kurve über das Alter. Keine Perzentile.
+4. Gewicht (kg), Größe (cm) und Kopfumfang (cm), jeweils mit Diagramm über das Alter. Jahre kräftig, Monate hell, Beschriftung standardmäßig alle 4 Monate. Darüber die WHO-Perzentile P3, P15, P50, P85 und P97 (Mädchen oder Junge, LMS der WHO Child Growth Standards 2006). Zeitraum 1 Jahr, 2 Jahre oder 5 Jahre direkt am Diagramm.
 5. Große Spracheingabe auf dem Startbildschirm. Der Parser versteht zum Beispiel „Temperatur jetzt 38,2“, „38.2 Grad“, „vor 15 Minuten 37,3 Grad“, „Ibuprofen gegeben“, „Paracetamol-Zäpfchen gegeben“, „Gewicht 9,6 Kilo“. Vor dem Speichern kannst du alles noch ändern. Ein späteres Sprachmodell (zum Beispiel Gemini) kann vor den Regeln eingehängt werden, siehe unten. In Snack und Expo Go tippst du den Satz; das Mikrofon läuft dort meist nicht.
 6. Deep Link `kindkrank://voice` öffnet direkt die Spracheingabe. Im APK gibt es dazu eine Android-App-Verknüpfung.
 7. Speicher hinter einer Repository-Schnittstelle. Dieser Prototyp speichert lokal (AsyncStorage). Kein Konto, kein API-Schlüssel. Der Plan für einen Familien-Einladungslink steht weiter unten.
 8. Unter Mehr exportierst du **alle** Daten als ZIP mit einer CSV pro Tabelle (Semikolon, UTF-8 mit BOM, für Excel in Deutschland). Ohne Wochenfilter.
-9. Mehr: Diagrammfenster, Standard-Messart, Standard für „gegeben von“, Kinder, Medikamente, Export, Erscheinungsbild (System, Hell, Dunkel).
+9. Startseite wie ein Tagesbuch: Name und Alter in Wochen und Tagen, Profilbild mit Rahmenfarbe, Tag vor und zurück, Zähler für den Tag, unten eine Leiste Temperatur, Medikament geben, Gewicht, Größe, Kopfumfang. Hamburger-Menü: Baby-Einträge und Einstellungen. Kein eigener Punkt Analyse und keine zentrale Erinnerungsliste. Erinnerungen sitzen bei Temperatur und bei jedem Medikament: täglich zu Uhrzeiten oder eine selbst gewählte Stundenzahl nach dem letzten Eintrag. Auf dem Handy sind das lokale Mitteilungen (`expo-notifications`). Im Browser werden sie nur gespeichert.
 
 ## Am PC ansehen
 
