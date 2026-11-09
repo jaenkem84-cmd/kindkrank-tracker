@@ -56,7 +56,7 @@ export function HomeScreen({
   const empty = temps.length + doses.length + weights.length === 0;
   const chips = [
     { label: 'Temperatur', count: temps.length, category: 'temperature' as const },
-    { label: 'Medikament', count: doses.length, category: 'medication' as const },
+    { label: 'Medikation', count: doses.length, category: 'medication' as const },
     { label: 'Gewicht', count: weights.length, category: 'weight' as const },
   ];
 

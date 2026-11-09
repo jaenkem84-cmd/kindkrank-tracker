@@ -12,4 +12,5 @@ export type Route =
   | { name: 'med-form'; medicationId?: string; prefillName?: string }
   | { name: 'dose-form'; medicationId?: string; entryId?: string }
   | { name: 'growth-form'; entryId?: string; metric?: GrowthMetric }
-  | { name: 'vaccination-form'; productId?: string };
+  | { name: 'vaccination-form'; productId?: string }
+  | { name: 'invite'; token: string };

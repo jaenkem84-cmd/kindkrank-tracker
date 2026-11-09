@@ -1,3 +1,10 @@
+/** Token from kindkrank://invite/<token> or a pasted code. */
+export function inviteTokenFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const match = url.match(/invite\/([A-Za-z0-9]+)/i);
+  return match?.[1] ?? null;
+}
+
 /** True when a deep link should open the voice screen. Supports kindkrank://voice and Expo path /voice. */
 export function isVoiceLink(url: string | null | undefined): boolean {
   if (!url) return false;

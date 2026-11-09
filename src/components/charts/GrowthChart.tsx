@@ -23,6 +23,8 @@ export function GrowthChart({
   labelEvery,
   onMonths,
   onLabelEvery,
+  selectedId = null,
+  onSelectId,
 }: {
   metric: GrowthMetric;
   sex: Sex | null;
@@ -32,6 +34,8 @@ export function GrowthChart({
   labelEvery: number;
   onMonths: (months: number) => void;
   onLabelEvery: (months: number) => void;
+  selectedId?: string | null;
+  onSelectId?: (id: string) => void;
 }) {
   const theme = useTheme();
   const field = FIELD[metric];
@@ -73,8 +77,8 @@ export function GrowthChart({
     points: bands
       .filter((point) => point.values[band.id] !== undefined)
       .map((point) => ({ x: point.month, y: point.values[band.id] as number })),
-    color: theme.dark ? 'rgba(169,178,189,0.75)' : 'rgba(92,103,115,0.7)',
-    width: band.id === 'P50' ? 1.35 : 0.9,
+    color: theme.dark ? 'rgba(186,194,204,0.55)' : 'rgba(90,98,110,0.45)',
+    width: band.id === 'P50' ? 1.2 : 0.9,
   }));
 
   return (
@@ -109,6 +113,8 @@ export function GrowthChart({
           verticals={verticals}
           horizontals={[]}
           yUnit={unit}
+          selectedId={selectedId}
+          onSelectId={onSelectId}
           endLabels={PERCENTILES.flatMap((band) => {
             const last = bands[bands.length - 1];
             const y = last?.values[band.id];
@@ -118,8 +124,8 @@ export function GrowthChart({
             ...percentileSeries,
             {
               points: measured.map((point) => ({ x: point.month, y: point.value })),
-              color: theme.accent,
-              width: 2.2,
+              color: '#3DB8B0',
+              width: 2.1,
             },
           ]}
           points={measured.map((point) => ({
@@ -127,7 +133,7 @@ export function GrowthChart({
             x: point.month,
             y: point.value,
             label: point.label,
-            fill: theme.accent,
+            fill: '#3DB8B0',
           }))}
         />
       ) : null}

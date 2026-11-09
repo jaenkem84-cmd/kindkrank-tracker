@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { GrowthChart } from '../components/charts/GrowthChart';
 import { Banner, Body, Button, Card, ConfirmDialog, DateTimeFields, Muted, Screen, TextField } from '../components/ui';
 import { combineBerlin, dateFieldValue, formatDateTime, timeFieldValue } from '../domain/dates';
@@ -26,31 +26,56 @@ export function GrowthScreen({
   const theme = useTheme();
   const [months, setMonths] = useState(24);
   const [labelEvery, setLabelEvery] = useState(4);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const scroller = useRef<{ scrollTo: (options: { y: number; animated?: boolean }) => void } | null>(null);
+  const rowY = useRef<Record<string, number>>({});
   const { data, activeChild } = useStore();
+  useEffect(() => {
+    if (!selectedId) return;
+    const y = rowY.current[selectedId];
+    if (y !== undefined) scroller.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+  }, [selectedId]);
   if (!data || !activeChild) return <Body>Lege zuerst ein Kind an.</Body>;
   const entries = forChild(data.growth, activeChild.id).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   const field = metric === 'weight' ? 'weightKg' : metric === 'height' ? 'heightCm' : 'headCm';
   const listed = [...entries].reverse().filter((entry) => entry[field] !== undefined);
 
   return (
-    <View style={{ gap: 14 }}>
-      <Button label={`${TITLES[metric]} eintragen`} onPress={onAdd} />
-      <Card>
-        <GrowthChart
-          metric={metric}
-          sex={activeChild.sex}
-          birthDate={activeChild.birthDate}
-          entries={entries}
-          months={months}
-          labelEvery={labelEvery}
-          onMonths={setMonths}
-          onLabelEvery={setLabelEvery}
-        />
-      </Card>
+    <View style={{ flex: 1 }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+        <Button label={`${TITLES[metric]} eintragen`} onPress={onAdd} />
+        <Card>
+          <GrowthChart
+            metric={metric}
+            sex={activeChild.sex}
+            birthDate={activeChild.birthDate}
+            entries={entries}
+            months={months}
+            labelEvery={labelEvery}
+            onMonths={setMonths}
+            onLabelEvery={setLabelEvery}
+            selectedId={selectedId}
+            onSelectId={setSelectedId}
+          />
+        </Card>
+      </View>
+      <ScrollView
+        ref={(node) => {
+          scroller.current = node;
+        }}
+        contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 28 }}
+      >
       {listed.map((entry) => (
-        <Pressable key={entry.id} accessibilityRole="button" onPress={() => onEdit(entry.id)}>
+        <Pressable
+          key={entry.id}
+          accessibilityRole="button"
+          onLayout={(event) => {
+            rowY.current[entry.id] = event.nativeEvent.layout.y;
+          }}
+          onPress={() => setSelectedId(entry.id)}
+        >
           <Card>
-            <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>
+            <Text style={{ color: entry.id === selectedId ? '#3DB8B0' : theme.text, fontSize: 18, fontWeight: '700' }}>
               {formatDateTime(new Date(entry.timestamp))}
             </Text>
             <Body>
@@ -63,9 +88,11 @@ export function GrowthScreen({
                 .join(' · ')}
             </Body>
             {entry.isExample ? <Muted>Beispieldaten</Muted> : null}
+            <Button compact label="Ändern" variant="secondary" onPress={() => onEdit(entry.id)} />
           </Card>
         </Pressable>
       ))}
+      </ScrollView>
     </View>
   );
 }

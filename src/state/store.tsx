@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { activeChildOf } from '../domain/select';
 import type { AppData, Child } from '../domain/types';
-import { createAsyncStorageRepository } from '../data/asyncStorageRepository';
+import { createSyncingRepository } from '../data/syncingRepository';
 import { createSeedData } from '../data/seed';
 
 type StoreValue = {
@@ -19,7 +19,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const dataRef = useRef<AppData | null>(null);
-  const repository = useRef(createAsyncStorageRepository());
+  const repository = useRef(createSyncingRepository());
 
   useEffect(() => {
     let cancel = false;

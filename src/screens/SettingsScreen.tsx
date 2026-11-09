@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, Share, Text, View } from 'react-native';
 import Constants from 'expo-constants';
 import { Avatar } from '../components/chrome';
 import { Banner, Body, Button, Card, ConfirmDialog, Muted, Screen, Segmented, TextField } from '../components/ui';
@@ -17,7 +17,7 @@ import {
   type MeasurementMethod,
   type Sex,
 } from '../domain/types';
-import { localFamilyDirectory } from '../data/sync';
+import { acceptFamilyInvite, createFamilyInvite } from '../data/familySync';
 import { removeCaregiver, removeChild, saveCaregiver, saveChild, saveSettings } from '../data/mutations';
 import { deleteExampleData } from '../data/seed';
 import { shareAllData } from '../export/shareCsv';
@@ -40,6 +40,8 @@ export function SettingsScreen({
   const [exportNote, setExportNote] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [familyNote, setFamilyNote] = useState<string | null>(null);
+  const [inviteText, setInviteText] = useState<string | null>(null);
+  const [inviteCode, setInviteCode] = useState('');
   if (!data) return <Body>{loadError ?? 'Keine Daten.'}</Body>;
   const snapshot = data;
   const owner = snapshot.caregivers.find((person) => person.isOwner) ?? snapshot.caregivers[0];
@@ -53,7 +55,7 @@ export function SettingsScreen({
         </Pressable>
       ) : null}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Body>Mein Baby</Body>
+        <Body>Mein Kind</Body>
         <Pressable accessibilityRole="button" accessibilityLabel="Kind hinzufügen" onPress={onAddChild} style={{ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ color: theme.accent, fontSize: 28 }}>+</Text>
         </Pressable>
@@ -81,12 +83,48 @@ export function SettingsScreen({
             <Muted>{person.role}</Muted>
           </Pressable>
         ))}
-        <Pressable onPress={onAddMember} style={{ width: '47%', backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.border, padding: 14, minHeight: 120, justifyContent: 'center' }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Mitglied hinzufügen"
+          onPress={() => {
+            void createFamilyInvite(snapshot)
+              .then(async (result) => {
+                if (result.data !== snapshot) update(() => result.data);
+                setInviteText(result.message);
+                try {
+                  await Share.share({ message: result.message });
+                } catch {
+                  // The text stays on screen when the sheet is unavailable.
+                }
+              })
+              .catch((error: unknown) => setFamilyNote(error instanceof Error ? error.message : 'Einladung fehlgeschlagen.'));
+          }}
+          style={{ width: '47%', backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.border, padding: 14, minHeight: 120, justifyContent: 'center' }}
+        >
           <Text style={{ color: theme.accent, fontSize: 28 }}>+</Text>
-          <Text style={{ color: theme.text, fontWeight: '700' }}>Mitglieder hinzufügen</Text>
+          <Text style={{ color: theme.text, fontWeight: '700' }}>Mitglied hinzufügen</Text>
           <Muted>Einträge anzeigen & bearbeiten</Muted>
         </Pressable>
       </View>
+      {inviteText ? (
+        <Card>
+          <Body>Einladung</Body>
+          <Text style={{ color: theme.text, fontSize: 14, lineHeight: 20 }}>{inviteText}</Text>
+          <Button label="Nochmal teilen" onPress={() => void Share.share({ message: inviteText })} />
+        </Card>
+      ) : null}
+      <TextField label="Einladung annehmen" value={inviteCode} onChangeText={setInviteCode} placeholder="Code oder Link" />
+      <Button
+        label="Code prüfen"
+        variant="secondary"
+        onPress={() => {
+          void acceptFamilyInvite(inviteCode, snapshot).then((result) => {
+            setFamilyNote(result.message);
+            if (result.data) update(() => result.data as NonNullable<typeof result.data>);
+          });
+        }}
+      />
+      {familyNote ? <Muted>{familyNote}</Muted> : null}
       <Body>Allgemeines</Body>
       <Segmented
         label="Standard-Messart"
@@ -121,20 +159,31 @@ export function SettingsScreen({
       />
       {exportNote ? <Banner tone="ok">{exportNote}</Banner> : null}
       {exportError ? <Banner tone="danger">{exportError}</Banner> : null}
-      <Button
-        label="Einladungslink"
-        variant="secondary"
-        onPress={() => {
-          void localFamilyDirectory.createInvite().then((result) => setFamilyNote(result.ok ? result.url : result.reason));
-        }}
-      />
-      {familyNote ? <Muted>{familyNote}</Muted> : null}
       {snapshot.children.some((child) => child.isExample) ? (
         <Button label="Beispieldaten löschen" variant="danger" onPress={() => update(deleteExampleData)} />
       ) : null}
       <Muted>{MEDICAL_DISCLAIMER}</Muted>
       <Muted>Kindkrank-Tracker {Constants.expoConfig?.version ?? '1.0.0'}</Muted>
     </View>
+  );
+}
+
+export function InviteAcceptScreen({ token, onDone }: { token: string; onDone: () => void }) {
+  const { data, update } = useStore();
+  const [message, setMessage] = useState('Einladung wird geprüft …');
+  const started = useRef(false);
+  useEffect(() => {
+    if (!data || started.current) return;
+    started.current = true;
+    void acceptFamilyInvite(token, data).then((result) => {
+      setMessage(result.message);
+      if (result.data) update(() => result.data as NonNullable<typeof result.data>);
+    });
+  }, [data, token, update]);
+  return (
+    <Screen title="Einladung" onBack={onDone}>
+      <Body>{message}</Body>
+    </Screen>
   );
 }
 
@@ -255,7 +304,7 @@ export function MemberScreen({ memberId, onDone }: { memberId?: string; onDone: 
       {existing && !existing.isOwner ? (
         <Button label="Entfernen" variant="danger" onPress={() => { update((current) => removeCaregiver(current, existing.id)); onDone(); }} />
       ) : null}
-      <Muted>Mitglieder können später über einen Einladungslink dieselben Einträge sehen. In diesem Prototyp bleiben die Daten auf dem Gerät.</Muted>
+      <Muted>Ein gemeinsamer Ordner braucht Supabase. Ohne diese Einrichtung bleibt jede Einladung nur ein Link, es werden keine Einträge übertragen.</Muted>
     </Screen>
   );
 }

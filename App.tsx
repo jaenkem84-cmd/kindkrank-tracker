@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from './src/components/chrome';
-import { isVoiceLink } from './src/navigation/linking';
+import { inviteTokenFromUrl, isVoiceLink } from './src/navigation/linking';
 import type { CategoryName, Route } from './src/navigation/types';
 import { shiftBerlinDays, sameBerlinDay } from './src/domain/dates';
 import { syncReminders } from './src/notifications/reminders';
@@ -12,7 +12,7 @@ import { Screen } from './src/components/ui';
 import { GrowthScreen, GrowthForm } from './src/screens/GrowthScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { DoseForm, MedicationForm, MedicationScreen } from './src/screens/MedicationScreen';
-import { MemberScreen, ProfileScreen, SettingsScreen } from './src/screens/SettingsScreen';
+import { InviteAcceptScreen, MemberScreen, ProfileScreen, SettingsScreen } from './src/screens/SettingsScreen';
 import { SymptomScreen } from './src/screens/SymptomScreen';
 import { TemperatureForm, TemperatureScreen } from './src/screens/TemperatureScreen';
 import { VaccinationForm, VaccinationScreen } from './src/screens/VaccinationScreen';
@@ -83,13 +83,16 @@ function Shell() {
   const owner = data?.caregivers.find((person) => person.isOwner);
 
   useEffect(() => {
-    const open = () => setStack([{ name: 'voice', autoStart: true }]);
-    void Linking.getInitialURL().then((url) => {
-      if (isVoiceLink(url)) open();
-    });
-    const subscription = Linking.addEventListener('url', ({ url }) => {
-      if (isVoiceLink(url)) open();
-    });
+    const open = (url: string | null) => {
+      const token = inviteTokenFromUrl(url);
+      if (token) {
+        setStack([{ name: 'invite', token }]);
+        return;
+      }
+      if (isVoiceLink(url)) setStack([{ name: 'voice', autoStart: true }]);
+    };
+    void Linking.getInitialURL().then(open);
+    const subscription = Linking.addEventListener('url', ({ url }) => open(url));
     return () => subscription.remove();
   }, []);
 
@@ -141,7 +144,9 @@ function Shell() {
           <Text style={{ color: theme.text, fontSize: 28, fontWeight: '700' }}>{CATEGORY_TITLE[route.name]}</Text>
         </View>
       ) : null}
-      {route && isCategory(route.name) ? (
+      {route && isStickyChart(route.name) ? (
+        <View style={styles.fill}>{body}</View>
+      ) : route && isCategory(route.name) ? (
         <ScrollView contentContainerStyle={styles.categoryBody} keyboardShouldPersistTaps="handled">
           {body}
         </ScrollView>
@@ -158,7 +163,7 @@ function Shell() {
                 <Text style={{ color: theme.muted }}>{owner ? roleLine(owner.role) : ''}</Text>
               </View>
             </View>
-            <DrawerItem label="Baby-Einträge" onPress={home} />
+            <DrawerItem label="Einträge" onPress={home} />
             <DrawerItem label="Einstellungen" onPress={() => push({ name: 'settings' })} />
           </Pressable>
         </Pressable>
@@ -168,8 +173,6 @@ function Shell() {
 }
 
 function roleLine(role: string): string {
-  if (role === 'Vater') return 'Babys Vater';
-  if (role === 'Mutter') return 'Babys Mutter';
   return role;
 }
 
@@ -180,6 +183,10 @@ function DrawerItem({ label, onPress }: { label: string; onPress: () => void }) 
       <Text style={{ color: theme.text, fontSize: 18 }}>{label}</Text>
     </Pressable>
   );
+}
+
+function isStickyChart(name: string): boolean {
+  return name === 'temperature' || name === 'weight' || name === 'height' || name === 'head';
 }
 
 function isCategory(name: string): name is CategoryName {
@@ -246,6 +253,7 @@ function RouteScreen({
   if (route.name === 'dose-form') return <DoseForm medicationId={route.medicationId} entryId={route.entryId} onDone={onDone} />;
   if (route.name === 'growth-form') return <GrowthForm entryId={route.entryId} onDone={onDone} />;
   if (route.name === 'vaccination-form') return <VaccinationForm productId={route.productId} onDone={onDone} />;
+  if (route.name === 'invite') return <InviteAcceptScreen token={route.token} onDone={onDone} />;
   return null;
 }
 

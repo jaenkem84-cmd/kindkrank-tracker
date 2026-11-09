@@ -259,6 +259,7 @@ export function createSeedData(now: Date): AppData {
       defaultGivenBy: 'Papa',
       activeChildId: anna.id,
       appearance: 'system',
+      familyId: null,
     },
   };
 }

@@ -10,6 +10,10 @@ export type ChartPoint = {
   y: number;
   label: string;
   fill?: string;
+  r?: number;
+  opacity?: number;
+  /** False for overlay marks that should not be selected. */
+  hit?: boolean;
 };
 
 export type ChartSeries = {
@@ -20,7 +24,7 @@ export type ChartSeries = {
 };
 
 type Tick = { x: number; label: string };
-type VLine = { x: number; strong: boolean };
+type VLine = { x: number; strong: boolean; label?: string };
 type HLine = { y: number; color: string; dashed?: boolean; label?: string };
 
 export function ChartFrame({
@@ -36,6 +40,8 @@ export function ChartFrame({
   markerLane = 0,
   yUnit,
   endLabels = [],
+  selectedId = null,
+  onSelectId,
 }: {
   height?: number;
   xDomain: [number, number];
@@ -49,10 +55,14 @@ export function ChartFrame({
   markerLane?: number;
   yUnit?: string;
   endLabels?: { y: number; text: string }[];
+  selectedId?: string | null;
+  onSelectId?: (id: string) => void;
 }) {
   const theme = useTheme();
   const [width, setWidth] = useState(360);
-  const [selected, setSelected] = useState<ChartPoint | null>(null);
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const activeId = selectedId ?? pickedId;
+  const selected = points.find((point) => point.id && point.id === activeId) ?? null;
   const pad = { left: 44, right: endLabels.length > 0 ? 34 : 8, top: 16, bottom: 28 + markerLane };
   const innerW = Math.max(width - pad.left - pad.right, 1);
   const innerH = Math.max(height - pad.top - pad.bottom, 1);
@@ -62,8 +72,8 @@ export function ChartFrame({
   const ySpan = y1 - y0 || 1;
   const xOf = (x: number) => pad.left + ((x - x0) / xSpan) * innerW;
   const yOf = (y: number) => pad.top + ((y1 - y) / ySpan) * innerH;
-  const minor = theme.dark ? 'rgba(244,240,232,0.10)' : 'rgba(28,36,48,0.08)';
-  const major = theme.dark ? 'rgba(244,240,232,0.78)' : 'rgba(28,36,48,0.62)';
+  const minor = theme.dark ? 'rgba(186,194,204,0.22)' : 'rgba(90,98,110,0.18)';
+  const major = theme.dark ? 'rgba(186,194,204,0.55)' : 'rgba(70,78,90,0.42)';
   const pathOf = line<{ x: number; y: number }>()
     .x((item) => xOf(item.x))
     .y((item) => yOf(item.y));
@@ -72,13 +82,17 @@ export function ChartFrame({
     let best: ChartPoint | null = null;
     let bestDist = 28;
     for (const point of points) {
+      if (point.hit === false || !point.id) continue;
       const dist = Math.abs(xOf(point.x) - locationX);
       if (dist < bestDist) {
         best = point;
         bestDist = dist;
       }
     }
-    if (best) setSelected(best);
+    if (best?.id) {
+      setPickedId(best.id);
+      onSelectId?.(best.id);
+    }
   }
 
   const tipLeft = selected ? Math.min(Math.max(xOf(selected.x) - 78, 8), Math.max(width - 168, 8)) : 0;
@@ -94,9 +108,34 @@ export function ChartFrame({
             y1={pad.top}
             y2={pad.top + innerH}
             stroke={item.strong ? major : minor}
-            strokeWidth={item.strong ? 1.6 : 0.6}
+            strokeWidth={item.strong ? 1.15 : 0.6}
           />
         ))}
+        {verticals.map((item, index) =>
+          item.label ? (
+            <SvgText
+              key={`vh-${index}`}
+              x={xOf(item.x)}
+              y={pad.top + innerH - 2}
+              fill={theme.muted}
+              fontSize={8}
+              textAnchor="middle"
+              opacity={0.8}
+            >
+              {item.label}
+            </SvgText>
+          ) : null,
+        )}
+        {selected ? (
+          <Line
+            x1={xOf(selected.x)}
+            x2={xOf(selected.x)}
+            y1={pad.top}
+            y2={pad.top + innerH}
+            stroke={theme.dark ? 'rgba(255,255,255,0.45)' : 'rgba(20,24,32,0.35)'}
+            strokeWidth={1}
+          />
+        ) : null}
         {yTicks.map((tick) => (
           <Line
             key={`y-${tick.label}`}
@@ -176,11 +215,16 @@ export function ChartFrame({
             key={point.id ?? `p-${index}`}
             cx={xOf(point.x)}
             cy={yOf(point.y)}
-            r={selected?.id && selected.id === point.id ? 5 : 3.2}
+            r={point.id && point.id === activeId ? 6 : (point.r ?? 3)}
             fill={point.fill ?? theme.accent}
-            stroke={theme.card}
-            strokeWidth={1.2}
-            onPress={() => setSelected(point)}
+            opacity={point.opacity ?? 1}
+            stroke={point.id && point.id === activeId ? '#FFFFFF' : theme.card}
+            strokeWidth={point.id && point.id === activeId ? 1.6 : 1}
+            onPress={() => {
+              if (!point.id || point.hit === false) return;
+              setPickedId(point.id);
+              onSelectId?.(point.id);
+            }}
           />
         ))}
       </Svg>

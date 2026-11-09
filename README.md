@@ -18,7 +18,7 @@ Technisch: Expo SDK 58, React Native, TypeScript. Der erste Start legt Beispield
 8. Deep Link `kindkrank://voice` öffnet direkt die Spracheingabe. Im APK gibt es dazu eine Android-App-Verknüpfung.
 9. Speicher hinter einer Repository-Schnittstelle. Dieser Prototyp speichert lokal (AsyncStorage). Kein Konto, kein API-Schlüssel. Der Plan für einen Familien-Einladungslink steht weiter unten.
 10. In den Einstellungen exportierst du **alle** Daten als ZIP mit einer CSV pro Tabelle, einschließlich Impfungen und Symptome (Semikolon, UTF-8 mit BOM). Ohne Wochenfilter.
-11. Startseite wie ein Tagesbuch: Name und Alter in Wochen und Tagen, Profilbild mit Rahmenfarbe, Tag vor und zurück, Zähler für den Tag, unten die Leiste Temperatur, Medikation, Impfung, Symptome, Gewicht, Größe, Kopfumfang. Hamburger-Menü: Baby-Einträge und Einstellungen. Kein eigener Punkt Analyse und keine zentrale Erinnerungsliste. Erinnerungen sitzen bei Temperatur und bei jedem Medikament. Auf dem Handy sind das lokale Mitteilungen. Im Browser werden sie nur gespeichert.
+11. Startseite wie ein Tagesbuch: Name und Alter in Wochen und Tagen, Profilbild mit Rahmenfarbe, Tag vor und zurück, Zähler für den Tag, unten die Leiste Temperatur, Medikation, Impfung, Symptome, Gewicht, Größe, Kopfumfang. Hamburger-Menü: Einträge und Einstellungen. Kein eigener Punkt Analyse und keine zentrale Erinnerungsliste. Erinnerungen sitzen bei Temperatur und bei jedem Medikament. Auf dem Handy sind das lokale Mitteilungen. Im Browser werden sie nur gespeichert.
 
 ## Am PC ansehen
 
@@ -117,6 +117,27 @@ Der Link lautet `kindkrank://voice` und öffnet die Spracheingabe.
 - **Installierte APK:** App-Icon lang drücken. Dort liegt die Verknüpfung **Spracheingabe** (kurz: Sprache). Sie wird beim nächsten Prebuild aus `plugins/withVoiceShortcut.js` in die Android-Shortcuts geschrieben. Dieselbe Kachel lässt sich auf den Homescreen ziehen. Ein eigener Android-Widget (App-Widget mit eigener Fläche) ist in Expo Go nicht möglich und in diesem Prototyp nicht als Widget gebaut; die App-Verknüpfung ist der vorbereitete Weg.
 - **Expo Go:** Der eigene Scheme `kindkrank://` öffnet Expo Go nicht. Dort die große Taste **Spracheingabe** auf dem Startbildschirm nutzen. Ein Shortcut auf `exp://…/--/voice` gilt nur, solange der Dev-Server läuft, und ist als Homescreen-Icon unpraktisch.
 - Zum Prüfen einer installierten App: `npx uri-scheme open kindkrank://voice --android`.
+
+## Supabase für die Familie
+
+Ohne die beiden Werte unten bleibt die App lokal. „Mitglied hinzufügen“ erzeugt trotzdem einen Link `kindkrank://invite/…` und einen Code. Die Meldung sagt ausdrücklich, dass noch nichts übertragen wird. Erst mit einem eingerichteten Projekt werden Einträge wirklich geteilt.
+
+1. Auf [supabase.com](https://supabase.com) ein kostenloses Projekt anlegen.
+2. Unter Authentication → Providers **Anonymous Sign-Ins** einschalten.
+3. Im SQL-Editor den Inhalt von `supabase/schema.sql` ausführen.
+4. Unter Project Settings → API die Project URL und den **anon public** Schlüssel kopieren. Den `service_role`-Schlüssel nicht verwenden.
+5. Im Projektordner eine Datei `.env` anlegen (Vorlage: `.env.example`):
+
+```bash
+EXPO_PUBLIC_SUPABASE_URL=https://DEIN-PROJEKT.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=dein-anon-schluessel
+```
+
+6. `npx expo start` neu starten. Danach legt die erste Einladung eine Familie an und speichert die Einträge dort. Die andere Person öffnet `kindkrank://invite/CODE` oder tippt den Code unter Einstellungen ein. Die Einladung gilt 7 Tage.
+
+Eine eigene https-Seite ist optional über `EXPO_PUBLIC_INVITE_WEB_BASE`. Ohne sie steht im geteilten Text, dass es noch keine Webseite gibt und der Code reicht.
+
+Das Schema nutzt Zeilensicherheit: nur Mitglieder einer Familie lesen und schreiben deren Dokument. Anlegen und Beitreten laufen über die Funktionen `ensure_family`, `create_invite` und `accept_invite`.
 
 ## Daten, Export, Familie
 

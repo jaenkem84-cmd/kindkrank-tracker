@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { TemperatureChart } from '../components/charts/TemperatureChart';
 import { ReminderCard } from '../components/ReminderCard';
 import { Banner, Body, Button, Card, ConfirmDialog, DateTimeFields, Muted, Screen, Segmented, TextField } from '../components/ui';
@@ -16,44 +17,77 @@ export function TemperatureScreen({ now, onEdit, onAdd }: { now: Date; onEdit: (
   const theme = useTheme();
   const [days, setDays] = useState(5);
   const [stepHours, setStepHours] = useState(6);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const scroller = useRef<{ scrollTo: (options: { y: number; animated?: boolean }) => void } | null>(null);
+  const rowY = useRef<Record<string, number>>({});
   const { data, activeChild } = useStore();
+  useEffect(() => {
+    if (!selectedId) return;
+    const y = rowY.current[selectedId];
+    if (y !== undefined) scroller.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+  }, [selectedId]);
   if (!data || !activeChild) return <Body>Lege zuerst ein Kind an.</Body>;
   const own = forChild(data.temperatures, activeChild.id);
   const listed = [...own].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   const reminder = data.reminders.find((item) => item.childId === activeChild.id && item.kind === 'temperature');
 
   return (
-    <View style={{ gap: 14 }}>
-      <Button label="Temperatur eintragen" onPress={onAdd} />
-      <Card>
-        <TemperatureChart
-          entries={own}
-          doses={forChild(data.doses, activeChild.id)}
-          medications={forChild(data.medications, activeChild.id)}
-          symptoms={forChild(data.symptoms, activeChild.id)}
-          now={now}
-          days={days}
-          stepHours={stepHours}
-          onDays={setDays}
-          onStep={setStepHours}
-        />
-      </Card>
-      <ReminderCard childId={activeChild.id} kind="temperature" reminder={reminder} />
-      {listed.map((entry) => (
-        <Pressable key={entry.id} accessibilityRole="button" onPress={() => onEdit(entry.id)}>
-          <Card>
-            <Text style={{ color: theme.text, fontSize: 22, fontWeight: '700' }}>{formatCelsius(entry.celsius)}</Text>
-            <Body>
-              {formatDateTime(new Date(entry.timestamp))} · {METHOD_LABELS[entry.method]}
-            </Body>
-            {entry.note ? <Muted>{entry.note}</Muted> : null}
-            {entry.isExample ? <Muted>Beispieldaten</Muted> : null}
-          </Card>
-        </Pressable>
-      ))}
+    <View style={{ flex: 1 }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: 8 }}>
+        <Button label="Temperatur eintragen" onPress={onAdd} />
+        <Card>
+          <TemperatureChart
+            entries={own}
+            doses={forChild(data.doses, activeChild.id)}
+            medications={forChild(data.medications, activeChild.id)}
+            symptoms={forChild(data.symptoms, activeChild.id)}
+            selectedId={selectedId}
+            onSelectId={setSelectedId}
+            now={now}
+            days={days}
+            stepHours={stepHours}
+            onDays={setDays}
+            onStep={setStepHours}
+          />
+        </Card>
+      </View>
+      <ScrollView
+        ref={(node) => {
+          scroller.current = node;
+        }}
+        contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 28 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <ReminderCard childId={activeChild.id} kind="temperature" reminder={reminder} />
+        {listed.map((entry) => {
+          const selected = entry.id === selectedId;
+          return (
+            <Pressable
+              key={entry.id}
+              accessibilityRole="button"
+              onLayout={(event) => {
+                rowY.current[entry.id] = event.nativeEvent.layout.y;
+              }}
+              onPress={() => setSelectedId(entry.id)}
+            >
+              <Card>
+                <Text style={{ color: selected ? TEMP_RED : theme.text, fontSize: 22, fontWeight: '700' }}>{formatCelsius(entry.celsius)}</Text>
+                <Body>
+                  {formatDateTime(new Date(entry.timestamp))} · {METHOD_LABELS[entry.method]}
+                </Body>
+                {entry.note ? <Muted>{entry.note}</Muted> : null}
+                {entry.isExample ? <Muted>Beispieldaten</Muted> : null}
+                <Button compact label="Ändern" variant="secondary" onPress={() => onEdit(entry.id)} />
+              </Card>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }
+
+const TEMP_RED = '#FF5C6C';
 
 export function TemperatureForm({ entryId, onDone }: { entryId?: string; onDone: () => void }) {
   const { data, activeChild, update } = useStore();

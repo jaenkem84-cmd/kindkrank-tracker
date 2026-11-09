@@ -93,6 +93,8 @@ export type Settings = {
   defaultGivenBy: string;
   activeChildId: string | null;
   appearance: Appearance;
+  /** Set when this device has joined a Supabase family. Null while local-only. */
+  familyId: string | null;
 };
 
 export type VaccinationEntry = {
