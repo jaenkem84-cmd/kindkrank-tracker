@@ -1,5 +1,6 @@
 import { addCalendarDays, formatDateTime, zonedDateTime } from '../dates';
 import { formatDecimal } from '../format';
+import { SYMPTOM_PATTERNS, symptomLabel } from '../symptoms';
 import { METHOD_LABELS, type MeasurementMethod } from '../types';
 import type { EntryParser, Intent, ParseContext, ParseResult, ParserMedication } from './types';
 
@@ -195,6 +196,17 @@ function doseTextFor(context: ParseContext, medicationId: string | null): string
   return context.medications.find((med) => med.id === medicationId)?.doseText ?? null;
 }
 
+function matchSymptom(folded: string): string | null {
+  const patterns = SYMPTOM_PATTERNS.flatMap((item) => item.phrases.map((phrase) => ({ id: item.id, phrase }))).sort(
+    (a, b) => b.phrase.length - a.phrase.length,
+  );
+  for (const item of patterns) {
+    const pattern = new RegExp(`(?:^|\\s)${item.phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$)`);
+    if (pattern.test(` ${folded} `)) return item.id;
+  }
+  return null;
+}
+
 function finish(parserId: string, intent: Intent, summary: string): ParseResult {
   return { parserId, intent, summary };
 }
@@ -268,6 +280,25 @@ function parseRules(text: string, context: ParseContext): ParseResult {
         childId,
       ),
     );
+  }
+
+  if (!hasTemp && !hasDose && !hasWeight) {
+    const symptom = matchSymptom(folded);
+    if (symptom) {
+      const severity = /\bstark\b/.test(folded) ? 3 : /\bleicht\b/.test(folded) ? 1 : null;
+      return finish(
+        'rules-de',
+        {
+          type: 'symptom',
+          childId,
+          timestamp: when,
+          symptomId: symptom,
+          label: symptomLabel(symptom),
+          severity,
+        },
+        withChild(`${symptomLabel(symptom)}, ${formatDateTime(timed.at)}`, context, childId),
+      );
+    }
   }
 
   const tryDose = hasDose || query.length > 0;

@@ -60,6 +60,20 @@ export function valueAtZ(l: number, m: number, s: number, z: number): number {
   return m * base ** (1 / l);
 }
 
+/** Closest labelled percentile for a measurement. Orientation only. */
+export function nearestPercentile(metric: GrowthMetric, sex: GrowthSex, ageMonths: number, value: number): string | null {
+  const lms = lmsAt(metric, sex, ageMonths);
+  if (!lms) return null;
+  let best: { id: string; distance: number } | null = null;
+  for (const band of PERCENTILES) {
+    const at = valueAtZ(lms.l, lms.m, lms.s, band.z);
+    if (!Number.isFinite(at)) continue;
+    const distance = Math.abs(at - value);
+    if (!best || distance < best.distance) best = { id: band.id, distance };
+  }
+  return best?.id ?? null;
+}
+
 export function percentileCurve(
   metric: GrowthMetric,
   sex: GrowthSex,

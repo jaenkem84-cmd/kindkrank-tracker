@@ -1,8 +1,9 @@
+import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { endOfBerlinDay, formatShortDay, formatTime, shiftBerlinDays, startOfBerlinDay } from '../../domain/dates';
 import { formatDecimal } from '../../domain/format';
 import { REFERENCE_LINES } from '../../domain/fever';
-import type { DoseEntry, Medication, TemperatureEntry } from '../../domain/types';
+import type { DoseEntry, Medication, SymptomEntry, TemperatureEntry } from '../../domain/types';
 import { useTheme } from '../../theme/ThemeProvider';
 import { ChartFrame } from './ChartFrame';
 import { ChoiceRow } from './ChoiceRow';
@@ -13,6 +14,7 @@ export function TemperatureChart({
   entries,
   doses,
   medications,
+  symptoms = [],
   now,
   days,
   stepHours,
@@ -22,6 +24,7 @@ export function TemperatureChart({
   entries: TemperatureEntry[];
   doses: DoseEntry[];
   medications: Medication[];
+  symptoms?: SymptomEntry[];
   now: Date;
   days: number;
   stepHours: number;
@@ -29,6 +32,7 @@ export function TemperatureChart({
   onStep: (hours: number) => void;
 }) {
   const theme = useTheme();
+  const [showSymptoms, setShowSymptoms] = useState(true);
   const end = endOfBerlinDay(now);
   const start = startOfBerlinDay(shiftBerlinDays(now, -(days - 1)));
   const from = start.getTime();
@@ -74,6 +78,15 @@ export function TemperatureChart({
         onChange={(value) => onDays(Number(value))}
       />
       <ChoiceRow
+        label="Symptome"
+        value={showSymptoms ? 'an' : 'aus'}
+        options={[
+          { value: 'an', label: 'an' },
+          { value: 'aus', label: 'aus' },
+        ]}
+        onChange={(value) => setShowSymptoms(value === 'an')}
+      />
+      <ChoiceRow
         label="Raster"
         value={String(stepHours)}
         options={[
@@ -95,6 +108,7 @@ export function TemperatureChart({
           dashed: true,
           label: formatDecimal(line.celsius, line.celsius % 1 === 0 ? 0 : 1),
         }))}
+        yUnit="°C"
         series={[
           {
             points: shown.map((entry) => ({ x: new Date(entry.timestamp).getTime(), y: entry.celsius })),
@@ -111,10 +125,11 @@ export function TemperatureChart({
         }))}
       />
       {markers.length > 0 ? <DoseTicks markers={markers} medications={medications} medIndex={medIndex} from={from} to={to} /> : null}
-      <Text style={{ color: theme.muted, fontSize: 12, lineHeight: 17 }}>
-        Senkrecht: Mitternacht kräftig, dazwischen {stepHours} Stunden. Gestrichelt 37,6 / 38,5 / 39 / 40, nur Orientierung.
-        {markers.length > 0 ? ' Striche unten sind Gaben.' : ''}
-      </Text>
+      {showSymptoms ? <SymptomTicks symptoms={symptoms.filter((item) => {
+        const time = new Date(item.timestamp).getTime();
+        return time >= from && time <= to;
+      })} from={from} to={to} /> : null}
+      <Text style={{ color: theme.muted, fontSize: 12 }}>Mitternacht kräftig. Gestrichelt nur zur Orientierung.</Text>
     </View>
   );
 }
@@ -168,6 +183,33 @@ function DoseTicks({
           );
         })}
       </View>
+    </View>
+  );
+}
+
+function SymptomTicks({ symptoms, from, to }: { symptoms: SymptomEntry[]; from: number; to: number }) {
+  const theme = useTheme();
+  if (symptoms.length === 0) return null;
+  const span = to - from || 1;
+  return (
+    <View style={{ gap: 4 }}>
+      <View style={{ height: 10, marginLeft: 44, marginRight: 8, position: 'relative' }}>
+        {symptoms.map((item) => (
+          <View
+            key={item.id}
+            style={{
+              position: 'absolute',
+              left: `${((new Date(item.timestamp).getTime() - from) / span) * 100}%`,
+              top: 2,
+              width: 6,
+              height: 6,
+              borderRadius: 3,
+              backgroundColor: theme.dark ? '#E7C27A' : '#8A5A16',
+            }}
+          />
+        ))}
+      </View>
+      <Text style={{ color: theme.muted, fontSize: 11 }}>Punkte: Symptome</Text>
     </View>
   );
 }

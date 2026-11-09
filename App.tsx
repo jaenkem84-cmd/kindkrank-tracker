@@ -13,7 +13,9 @@ import { GrowthScreen, GrowthForm } from './src/screens/GrowthScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { DoseForm, MedicationForm, MedicationScreen } from './src/screens/MedicationScreen';
 import { MemberScreen, ProfileScreen, SettingsScreen } from './src/screens/SettingsScreen';
+import { SymptomScreen } from './src/screens/SymptomScreen';
 import { TemperatureForm, TemperatureScreen } from './src/screens/TemperatureScreen';
+import { VaccinationForm, VaccinationScreen } from './src/screens/VaccinationScreen';
 import { VoiceScreen } from './src/screens/VoiceScreen';
 import { StoreProvider, useStore } from './src/state/store';
 import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
@@ -21,7 +23,9 @@ import type { GrowthMetric } from './src/domain/who/who';
 
 const CATEGORY_TITLE: Record<CategoryName, string> = {
   temperature: 'Temperatur',
-  medication: 'Medikament geben',
+  medication: 'Medikation',
+  vaccination: 'Impfung',
+  symptom: 'Symptome',
   weight: 'Gewicht',
   height: 'Größe',
   head: 'Kopfumfang',
@@ -179,7 +183,15 @@ function DrawerItem({ label, onPress }: { label: string; onPress: () => void }) 
 }
 
 function isCategory(name: string): name is CategoryName {
-  return name === 'temperature' || name === 'medication' || name === 'weight' || name === 'height' || name === 'head';
+  return (
+    name === 'temperature' ||
+    name === 'medication' ||
+    name === 'vaccination' ||
+    name === 'symptom' ||
+    name === 'weight' ||
+    name === 'height' ||
+    name === 'head'
+  );
 }
 
 function RouteScreen({
@@ -206,6 +218,10 @@ function RouteScreen({
       />
     );
   }
+  if (route.name === 'vaccination') {
+    return <VaccinationScreen now={now} onAdd={(productId) => onPush({ name: 'vaccination-form', productId })} />;
+  }
+  if (route.name === 'symptom') return <SymptomScreen now={now} />;
   if (route.name === 'weight' || route.name === 'height' || route.name === 'head') {
     const metric: GrowthMetric = route.name === 'weight' ? 'weight' : route.name === 'height' ? 'height' : 'head';
     return <GrowthScreen metric={metric} onAdd={() => onPush({ name: 'growth-form', metric })} onEdit={(entryId) => onPush({ name: 'growth-form', entryId, metric })} />;
@@ -229,6 +245,7 @@ function RouteScreen({
   if (route.name === 'med-form') return <MedicationForm medicationId={route.medicationId} prefillName={route.prefillName} onDone={onDone} />;
   if (route.name === 'dose-form') return <DoseForm medicationId={route.medicationId} entryId={route.entryId} onDone={onDone} />;
   if (route.name === 'growth-form') return <GrowthForm entryId={route.entryId} onDone={onDone} />;
+  if (route.name === 'vaccination-form') return <VaccinationForm productId={route.productId} onDone={onDone} />;
   return null;
 }
 

@@ -30,6 +30,7 @@ export function TemperatureScreen({ now, onEdit, onAdd }: { now: Date; onEdit: (
           entries={own}
           doses={forChild(data.doses, activeChild.id)}
           medications={forChild(data.medications, activeChild.id)}
+          symptoms={forChild(data.symptoms, activeChild.id)}
           now={now}
           days={days}
           stepHours={stepHours}

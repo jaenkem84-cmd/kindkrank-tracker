@@ -48,12 +48,21 @@ export type GrowthIntent = {
   headCm: number | null;
 };
 
+export type SymptomIntent = {
+  type: 'symptom';
+  childId: string | null;
+  timestamp: string;
+  symptomId: string;
+  label: string;
+  severity: 1 | 2 | 3 | null;
+};
+
 export type UnknownIntent = {
   type: 'unknown';
   text: string;
 };
 
-export type Intent = TemperatureIntent | DoseIntent | GrowthIntent | UnknownIntent;
+export type Intent = TemperatureIntent | DoseIntent | GrowthIntent | SymptomIntent | UnknownIntent;
 
 export type ParseResult = {
   intent: Intent;

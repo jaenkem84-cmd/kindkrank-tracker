@@ -10,7 +10,9 @@ import { useTheme } from '../theme/ThemeProvider';
 
 const CATEGORIES: { id: CategoryName; label: string }[] = [
   { id: 'temperature', label: 'Temperatur' },
-  { id: 'medication', label: 'Medikament geben' },
+  { id: 'medication', label: 'Medikation' },
+  { id: 'vaccination', label: 'Impfung' },
+  { id: 'symptom', label: 'Symptome' },
   { id: 'weight', label: 'Gewicht' },
   { id: 'height', label: 'Größe' },
   { id: 'head', label: 'Kopfumfang' },

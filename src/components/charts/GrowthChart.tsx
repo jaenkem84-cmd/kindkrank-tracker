@@ -2,7 +2,7 @@ import { Text, View } from 'react-native';
 import { ageMonths, formatDate } from '../../domain/dates';
 import { formatDecimal } from '../../domain/format';
 import type { GrowthEntry, Sex } from '../../domain/types';
-import { PERCENTILES, WHO_CITATION, percentileCurve, type GrowthMetric } from '../../domain/who/who';
+import { PERCENTILES, nearestPercentile, percentileCurve, type GrowthMetric } from '../../domain/who/who';
 import { useTheme } from '../../theme/ThemeProvider';
 import { ChartFrame } from './ChartFrame';
 import { ChoiceRow } from './ChoiceRow';
@@ -42,7 +42,9 @@ export function GrowthChart({
       id: entry.id,
       month: ageMonths(birthDate, new Date(entry.timestamp)),
       value: entry[field] as number,
-      label: `${formatDate(new Date(entry.timestamp))} · ${formatDecimal(entry[field] as number, metric === 'weight' ? 2 : 1)} ${unit}`,
+      label: `${formatDate(new Date(entry.timestamp))} · ${formatDecimal(entry[field] as number, metric === 'weight' ? 2 : 1)} ${unit}${
+        sex ? ` · nahe ${nearestPercentile(metric, sex, ageMonths(birthDate, new Date(entry.timestamp)), entry[field] as number) ?? '–'}` : ''
+      }`,
     }))
     .filter((point) => point.month >= 0 && point.month <= months)
     .sort((a, b) => a.month - b.month);
@@ -106,6 +108,12 @@ export function GrowthChart({
           xLabels={labels}
           verticals={verticals}
           horizontals={[]}
+          yUnit={unit}
+          endLabels={PERCENTILES.flatMap((band) => {
+            const last = bands[bands.length - 1];
+            const y = last?.values[band.id];
+            return y === undefined ? [] : [{ y, text: band.id }];
+          })}
           series={[
             ...percentileSeries,
             {
@@ -123,9 +131,8 @@ export function GrowthChart({
           }))}
         />
       ) : null}
-      <Text style={{ color: theme.muted, fontSize: 12, lineHeight: 17 }}>
-        Jahre kräftig, Monate hell, Beschriftung alle {labelEvery} Monate. {sex ? 'P3, P15, P50, P85, P97.' : 'Für Perzentile das Geschlecht im Profil setzen.'}{' '}
-        {WHO_CITATION}
+      <Text style={{ color: theme.muted, fontSize: 12 }}>
+        Alter in Monaten. {sex ? 'Kurven: WHO-Perzentile.' : 'Geschlecht im Profil fehlt, deshalb keine Perzentile.'}
       </Text>
     </View>
   );

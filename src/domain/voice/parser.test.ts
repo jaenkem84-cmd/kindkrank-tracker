@@ -114,6 +114,15 @@ describe('Sprachparser', () => {
     assert.equal(result.intent.timestamp, NOW.toISOString());
   });
 
+  it('versteht Husten und hat erbrochen als Symptom', () => {
+    const cough = parseUtterance('Husten', context());
+    assert.equal(cough.intent.type, 'symptom');
+    if (cough.intent.type === 'symptom') assert.equal(cough.intent.symptomId, 'husten');
+    const sick = parseUtterance('hat erbrochen', context());
+    assert.equal(sick.intent.type, 'symptom');
+    if (sick.intent.type === 'symptom') assert.equal(sick.intent.symptomId, 'erbrechen');
+  });
+
   it('meldet unbekannte Sätze', () => {
     const result = parseUtterance('Hallo Welt', context());
     assert.equal(result.intent.type, 'unknown');

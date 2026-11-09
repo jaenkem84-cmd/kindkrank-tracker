@@ -7,7 +7,9 @@ import type {
   Medication,
   Reminder,
   Settings,
+  SymptomEntry,
   TemperatureEntry,
+  VaccinationEntry,
 } from '../domain/types';
 
 function replaceById<T extends { id: string }>(items: T[], item: T): T[] {
@@ -39,6 +41,8 @@ export function removeChild(data: AppData, childId: string): AppData {
     medications: data.medications.filter((entry) => entry.childId !== childId),
     doses: data.doses.filter((entry) => entry.childId !== childId && !medicationIds.has(entry.medicationId)),
     growth: data.growth.filter((entry) => entry.childId !== childId),
+    vaccinations: data.vaccinations.filter((entry) => entry.childId !== childId),
+    symptoms: data.symptoms.filter((entry) => entry.childId !== childId),
     reminders: data.reminders.filter((entry) => entry.childId !== childId),
     settings: { ...data.settings, activeChildId: activeAfter(data, children) },
   };
@@ -91,6 +95,22 @@ export function saveCaregiver(data: AppData, caregiver: Caregiver): AppData {
 
 export function removeCaregiver(data: AppData, id: string): AppData {
   return { ...data, caregivers: data.caregivers.filter((entry) => entry.isOwner || entry.id !== id) };
+}
+
+export function saveVaccination(data: AppData, entry: VaccinationEntry): AppData {
+  return { ...data, vaccinations: replaceById(data.vaccinations, entry) };
+}
+
+export function removeVaccination(data: AppData, id: string): AppData {
+  return { ...data, vaccinations: data.vaccinations.filter((entry) => entry.id !== id) };
+}
+
+export function saveSymptom(data: AppData, entry: SymptomEntry): AppData {
+  return { ...data, symptoms: replaceById(data.symptoms, entry) };
+}
+
+export function removeSymptom(data: AppData, id: string): AppData {
+  return { ...data, symptoms: data.symptoms.filter((entry) => entry.id !== id) };
 }
 
 export function saveReminder(data: AppData, reminder: Reminder): AppData {

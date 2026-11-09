@@ -9,6 +9,7 @@
     "expo": "~58.0.23",
     "expo-constants": "~58.0.15",
     "expo-file-system": "~58.0.13",
+    "expo-image-picker": "~58.0.10",
     "expo-linking": "~58.0.16",
     "expo-notifications": "~58.1.8",
     "expo-sharing": "~58.0.22",
@@ -34,7 +35,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "tsx --test src/domain/medication.test.ts src/domain/illness.test.ts src/domain/voice/parser.test.ts src/domain/who/who.test.ts src/domain/age.test.ts src/navigation/linking.test.ts",
+    "test": "tsx --test src/domain/medication.test.ts src/domain/illness.test.ts src/domain/voice/parser.test.ts src/domain/who/who.test.ts src/domain/age.test.ts src/domain/vaccines/matcher.test.ts src/domain/vaccines/stiko.test.ts src/navigation/linking.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "private": true

@@ -16,7 +16,8 @@ import {
 } from '../domain/types';
 import { interpretUtterance } from '../domain/voice';
 import type { ParseContext } from '../domain/voice/types';
-import { saveDose, saveGrowth, saveMedication, saveTemperature } from '../data/mutations';
+import { saveDose, saveGrowth, saveMedication, saveSymptom, saveTemperature } from '../data/mutations';
+import type { SymptomEntry } from '../domain/types';
 import { speechSupport, startSpeech, type SpeechSession, type SpeechSupport } from '../speech/recognition';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
@@ -49,6 +50,15 @@ type Draft =
       weight: string;
       height: string;
       head: string;
+      date: string;
+      time: string;
+    }
+  | {
+      kind: 'symptom';
+      childId: string;
+      symptomId: string;
+      label: string;
+      severity: 1 | 2 | 3 | null;
       date: string;
       time: string;
     };
@@ -155,6 +165,19 @@ export function VoiceScreen({ autoStart = false, onDone }: { autoStart?: boolean
       });
       return;
     }
+    if (result.intent.type === 'symptom') {
+      const at = new Date(result.intent.timestamp);
+      setDraft({
+        kind: 'symptom',
+        childId: result.intent.childId ?? activeChild?.id ?? '',
+        symptomId: result.intent.symptomId,
+        label: result.intent.label,
+        severity: result.intent.severity,
+        date: dateFieldValue(at),
+        time: timeFieldValue(at),
+      });
+      return;
+    }
     if (result.intent.type === 'dose') {
       const at = new Date(result.intent.timestamp);
       setDraft({
@@ -199,6 +222,26 @@ export function VoiceScreen({ autoStart = false, onDone }: { autoStart?: boolean
         isExample: false,
       };
       update((current) => saveTemperature(current, entry));
+      onDone();
+      return;
+    }
+    if (draft.kind === 'symptom') {
+      const when = combineBerlin(draft.date, draft.time);
+      if (!when) {
+        setError('Prüf Datum und Uhrzeit.');
+        return;
+      }
+      const entry: SymptomEntry = {
+        id: createId('sym'),
+        childId: draft.childId,
+        timestamp: when.toISOString(),
+        symptomId: draft.symptomId,
+        label: draft.label,
+        severity: draft.severity,
+        note: '',
+        isExample: false,
+      };
+      update((current) => saveSymptom(current, entry));
       onDone();
       return;
     }

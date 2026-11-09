@@ -1,6 +1,16 @@
 import { zonedDateTime } from '../domain/dates';
 import { createId } from '../domain/ids';
-import type { AppData, Caregiver, Child, DoseEntry, GrowthEntry, Medication, TemperatureEntry } from '../domain/types';
+import type {
+  AppData,
+  Caregiver,
+  Child,
+  DoseEntry,
+  GrowthEntry,
+  Medication,
+  SymptomEntry,
+  TemperatureEntry,
+  VaccinationEntry,
+} from '../domain/types';
 
 function at(day: string, time: string): string {
   const [date, month, year] = day.split('.').map(Number);
@@ -69,9 +79,67 @@ const WEIGHT: [string, number][] = [
   ['16.01.2026', 8.68],
 ];
 
+function exampleVaccinations(childId: string): VaccinationEntry[] {
+  const shot = (
+    day: string,
+    productId: string,
+    productName: string,
+    antigens: string[],
+  ): VaccinationEntry => ({
+    id: createId('impf'),
+    childId,
+    timestamp: at(day, '10:00'),
+    productId,
+    productName,
+    antigens,
+    batch: 'BEISPIEL',
+    doctor: 'Kinderarztpraxis Beispiel',
+    note: 'Beispieldaten, keine Dokumentation aus einem Impfpass.',
+    isExample: true,
+  });
+  const six = ['diphtherie', 'tetanus', 'pertussis', 'hib', 'polio', 'hepatitisB'];
+  return [
+    shot('17.03.2025', 'hexyon', 'Hexyon', six),
+    shot('17.03.2025', 'prevenar13', 'Prevenar 13', ['pneumokokken']),
+    shot('17.03.2025', 'bexsero', 'Bexsero', ['menb']),
+    shot('17.03.2025', 'rotarix', 'Rotarix', ['rotaviren']),
+    shot('19.05.2025', 'hexyon', 'Hexyon', six),
+    shot('19.05.2025', 'prevenar13', 'Prevenar 13', ['pneumokokken']),
+    shot('19.05.2025', 'bexsero', 'Bexsero', ['menb']),
+    shot('19.05.2025', 'rotarix', 'Rotarix', ['rotaviren']),
+    shot('17.12.2025', 'hexyon', 'Hexyon', six),
+    shot('17.12.2025', 'prevenar13', 'Prevenar 13', ['pneumokokken']),
+    shot('17.12.2025', 'priorix', 'Priorix', ['masern', 'mumps', 'roeteln']),
+    shot('17.12.2025', 'varivax', 'Varivax', ['varizellen']),
+    shot('16.01.2026', 'bexsero', 'Bexsero', ['menb']),
+    shot('16.04.2026', 'priorix', 'Priorix', ['masern', 'mumps', 'roeteln']),
+    shot('16.04.2026', 'varivax', 'Varivax', ['varizellen']),
+  ];
+}
+
+function exampleSymptoms(childId: string): SymptomEntry[] {
+  const item = (day: string, time: string, symptomId: string, label: string): SymptomEntry => ({
+    id: createId('sym'),
+    childId,
+    timestamp: at(day, time),
+    symptomId,
+    label,
+    severity: null,
+    note: '',
+    isExample: true,
+  });
+  return [
+    item('04.11.2026', '09:10', 'husten', 'Husten'),
+    item('04.11.2026', '20:15', 'schnupfen', 'Schnupfen'),
+    item('05.11.2026', '12:40', 'appetit', 'Appetitlosigkeit'),
+    item('06.11.2026', '08:05', 'husten', 'Husten'),
+  ];
+}
+
 /**
  * Anna, girl, born 15.01.2025, with the recorded measurements.
  * Medication intervals are example values entered like a parent would, not recommendations.
+ * Vaccinations follow the shape of the STIKO 2026 infant schedule and are example data only.
  */
 export function createSeedData(now: Date): AppData {
   const anna: Child = {
@@ -176,13 +244,15 @@ export function createSeedData(now: Date): AppData {
   for (const [day, weightKg] of WEIGHT) growthOf(day).weightKg = weightKg;
 
   return {
-    version: 2,
+    version: 3,
     children: [anna],
     caregivers: [papa],
     temperatures,
     medications: [ibuprofen, paracetamol, prospan],
     doses,
     growth: [...byDay.values()],
+    vaccinations: exampleVaccinations(anna.id),
+    symptoms: exampleSymptoms(anna.id),
     reminders: [],
     settings: {
       defaultMethod: 'rektal',
@@ -205,6 +275,8 @@ export function deleteExampleData(data: AppData): AppData {
     medications: data.medications.filter((entry) => !drop(entry.childId, entry.isExample)),
     doses: data.doses.filter((entry) => !drop(entry.childId, entry.isExample)),
     growth: data.growth.filter((entry) => !drop(entry.childId, entry.isExample)),
+    vaccinations: data.vaccinations.filter((entry) => !drop(entry.childId, entry.isExample)),
+    symptoms: data.symptoms.filter((entry) => !drop(entry.childId, entry.isExample)),
     reminders: data.reminders.filter((entry) => !exampleIds.has(entry.childId)),
     settings: {
       ...data.settings,
@@ -223,5 +295,7 @@ export function keepExampleChild(data: AppData, childId: string): AppData {
     medications: clear(data.medications),
     doses: clear(data.doses),
     growth: clear(data.growth),
+    vaccinations: clear(data.vaccinations),
+    symptoms: clear(data.symptoms),
   };
 }

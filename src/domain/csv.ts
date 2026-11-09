@@ -121,6 +121,35 @@ export function buildExportFiles(data: AppData): CsvFile[] {
     ]),
   );
 
+  const impfungen = toCsv(
+    ['id', 'kind_id', 'kind', 'zeitpunkt', 'handelsname', 'antigene', 'charge', 'arzt', 'notiz', 'beispiel'],
+    data.vaccinations.map((entry) => [
+      entry.id,
+      entry.childId,
+      childName(data, entry.childId),
+      stamp(entry.timestamp),
+      entry.productName,
+      entry.antigens.join(' '),
+      entry.batch,
+      entry.doctor,
+      entry.note,
+      flag(entry.isExample),
+    ]),
+  );
+  const symptome = toCsv(
+    ['id', 'kind_id', 'kind', 'zeitpunkt', 'symptom', 'schwere', 'notiz', 'beispiel'],
+    data.symptoms.map((entry) => [
+      entry.id,
+      entry.childId,
+      childName(data, entry.childId),
+      stamp(entry.timestamp),
+      entry.label,
+      entry.severity === null ? '' : String(entry.severity),
+      entry.note,
+      flag(entry.isExample),
+    ]),
+  );
+
   return [
     { name: 'kinder.csv', contents: kinder },
     { name: 'temperatur.csv', contents: temperatur },
@@ -128,6 +157,8 @@ export function buildExportFiles(data: AppData): CsvFile[] {
     { name: 'gaben.csv', contents: gaben },
     { name: 'wachstum.csv', contents: wachstum },
     { name: 'familie.csv', contents: familie },
+    { name: 'impfungen.csv', contents: impfungen },
+    { name: 'symptome.csv', contents: symptome },
     { name: 'erinnerungen.csv', contents: erinnerungen },
   ];
 }

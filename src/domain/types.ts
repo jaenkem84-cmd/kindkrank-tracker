@@ -95,14 +95,46 @@ export type Settings = {
   appearance: Appearance;
 };
 
+export type VaccinationEntry = {
+  id: string;
+  childId: string;
+  /** ISO timestamp, the calendar day of the vaccination. */
+  timestamp: string;
+  /** Id from the bundled product list, or null if only diseases were chosen. */
+  productId: string | null;
+  /** Handelsname as shown to the parent. */
+  productName: string;
+  /** Antigen ids covered by this dose. */
+  antigens: string[];
+  batch: string;
+  doctor: string;
+  note: string;
+  isExample: boolean;
+};
+
+export type SymptomEntry = {
+  id: string;
+  childId: string;
+  timestamp: string;
+  /** Id from the chip list, or null for free text. */
+  symptomId: string | null;
+  label: string;
+  /** 1 leicht, 2 mittel, 3 stark. Omitted when the parent did not choose. */
+  severity: 1 | 2 | 3 | null;
+  note: string;
+  isExample: boolean;
+};
+
 export type AppData = {
-  version: 2;
+  version: 3;
   children: Child[];
   caregivers: Caregiver[];
   temperatures: TemperatureEntry[];
   medications: Medication[];
   doses: DoseEntry[];
   growth: GrowthEntry[];
+  vaccinations: VaccinationEntry[];
+  symptoms: SymptomEntry[];
   reminders: Reminder[];
   settings: Settings;
 };

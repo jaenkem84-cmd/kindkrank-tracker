@@ -34,6 +34,8 @@ export function ChartFrame({
   series,
   points,
   markerLane = 0,
+  yUnit,
+  endLabels = [],
 }: {
   height?: number;
   xDomain: [number, number];
@@ -45,11 +47,13 @@ export function ChartFrame({
   series: ChartSeries[];
   points: ChartPoint[];
   markerLane?: number;
+  yUnit?: string;
+  endLabels?: { y: number; text: string }[];
 }) {
   const theme = useTheme();
   const [width, setWidth] = useState(360);
   const [selected, setSelected] = useState<ChartPoint | null>(null);
-  const pad = { left: 44, right: 8, top: 12, bottom: 28 + markerLane };
+  const pad = { left: 44, right: endLabels.length > 0 ? 34 : 8, top: 16, bottom: 28 + markerLane };
   const innerW = Math.max(width - pad.left - pad.right, 1);
   const innerH = Math.max(height - pad.top - pad.bottom, 1);
   const [x0, x1] = xDomain;
@@ -133,6 +137,11 @@ export function ChartFrame({
             />
           );
         })}
+        {yUnit ? (
+          <SvgText x={pad.left - 6} y={11} fill={theme.muted} fontSize={10} textAnchor="end">
+            {yUnit}
+          </SvgText>
+        ) : null}
         {yTicks.map((tick) => (
           <SvgText
             key={`yl-${tick.label}`}
@@ -143,6 +152,11 @@ export function ChartFrame({
             textAnchor="end"
           >
             {tick.label}
+          </SvgText>
+        ))}
+        {placeEndLabels(endLabels, yOf).map((label) => (
+          <SvgText key={`end-${label.text}`} x={width - 2} y={label.pixel + 3} fill={theme.muted} fontSize={9} textAnchor="end">
+            {label.text}
           </SvgText>
         ))}
         {horizontals.map((item) =>
@@ -199,4 +213,16 @@ export function ChartFrame({
       ) : null}
     </View>
   );
+}
+
+function placeEndLabels(labels: { y: number; text: string }[], yOf: (y: number) => number): { text: string; pixel: number }[] {
+  const placed: { text: string; pixel: number }[] = [];
+  const ordered = [...labels].sort((a, b) => yOf(a.y) - yOf(b.y));
+  for (const label of ordered) {
+    const pixel = yOf(label.y);
+    const crowded = placed.some((item) => Math.abs(item.pixel - pixel) < 11);
+    if (crowded && label.text !== 'P50') continue;
+    placed.push({ text: label.text, pixel });
+  }
+  return placed;
 }
