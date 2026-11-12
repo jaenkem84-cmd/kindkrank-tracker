@@ -22,7 +22,7 @@ import { ANTIGEN_LABELS, type AntigenId } from './products';
  * - MenACWY: 12–14 years (the 12-month MenC dose was dropped, Epid. Bull. 44/2025)
  */
 
-export type DoseStatus = 'erledigt' | 'faellig' | 'ueberfaellig' | 'spaeter' | 'fenster';
+export type DoseStatus = 'erledigt' | 'faellig' | 'ueberfaellig' | 'spaeter' | 'fenster' | 'unklar';
 
 export const STATUS_LABEL: Record<DoseStatus, string> = {
   erledigt: 'erledigt',
@@ -30,6 +30,7 @@ export const STATUS_LABEL: Record<DoseStatus, string> = {
   ueberfaellig: 'überfällig',
   spaeter: 'später',
   fenster: 'Zeitfenster vorbei',
+  unklar: 'unklar',
 };
 
 type DoseRule = {

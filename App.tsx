@@ -80,6 +80,7 @@ function Shell() {
   const [stack, setStack] = useState<Route[]>([]);
   const [drawer, setDrawer] = useState(false);
   const route = stack[stack.length - 1];
+  const self = data?.children.find((person) => person.isSelf);
   const owner = data?.caregivers.find((person) => person.isOwner);
 
   useEffect(() => {
@@ -157,10 +158,10 @@ function Shell() {
         <Pressable style={styles.backdrop} onPress={() => setDrawer(false)}>
           <Pressable style={[styles.drawer, { backgroundColor: theme.card }]} onPress={() => undefined}>
             <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 24 }}>
-              <Avatar name={owner?.name ?? '?'} color={theme.accent} size={56} />
+              <Avatar name={self?.name ?? owner?.name ?? '?'} color={self?.frameColor ?? theme.accent} size={56} />
               <View>
-                <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>{owner?.name ?? 'Profil'}</Text>
-                <Text style={{ color: theme.muted }}>{owner ? roleLine(owner.role) : ''}</Text>
+                <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>{self?.name ?? owner?.name ?? 'Profil'}</Text>
+                <Text style={{ color: theme.muted }}>{self?.role || (owner ? roleLine(owner.role) : '')}</Text>
               </View>
             </View>
             <DrawerItem label="Einträge" onPress={home} />

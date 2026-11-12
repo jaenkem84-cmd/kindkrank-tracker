@@ -119,7 +119,13 @@ export function VoiceScreen({ autoStart = false, onDone }: { autoStart?: boolean
     }
     return {
       now: new Date(),
-      children: data.children.map((child) => ({ id: child.id, name: child.name })),
+      children: data.children.map((child) => ({
+        id: child.id,
+        name: child.name,
+        role: child.role,
+        isSelf: child.isSelf,
+        defaultMethod: child.defaultMethod,
+      })),
       medications: data.medications.map((medication) => ({
         id: medication.id,
         childId: medication.childId,
@@ -140,11 +146,12 @@ export function VoiceScreen({ autoStart = false, onDone }: { autoStart?: boolean
     setPendingDose(null);
     const result = await interpretUtterance(raw, context);
     setSummary(result.summary);
+    const personId = result.personAmbiguous ? '' : (result.intent.type === 'unknown' ? '' : (result.intent.childId ?? activeChild?.id ?? ''));
     if (result.intent.type === 'temperature') {
       const at = new Date(result.intent.timestamp);
       setDraft({
         kind: 'temperature',
-        childId: result.intent.childId ?? activeChild?.id ?? '',
+        childId: personId,
         celsius: String(result.intent.celsius).replace('.', ','),
         method: result.intent.method,
         date: dateFieldValue(at),
@@ -156,7 +163,7 @@ export function VoiceScreen({ autoStart = false, onDone }: { autoStart?: boolean
       const at = new Date(result.intent.timestamp);
       setDraft({
         kind: 'growth',
-        childId: result.intent.childId ?? activeChild?.id ?? '',
+        childId: personId,
         weight: result.intent.weightKg === null ? '' : String(result.intent.weightKg).replace('.', ','),
         height: result.intent.heightCm === null ? '' : String(result.intent.heightCm).replace('.', ','),
         head: result.intent.headCm === null ? '' : String(result.intent.headCm).replace('.', ','),
@@ -169,7 +176,7 @@ export function VoiceScreen({ autoStart = false, onDone }: { autoStart?: boolean
       const at = new Date(result.intent.timestamp);
       setDraft({
         kind: 'symptom',
-        childId: result.intent.childId ?? activeChild?.id ?? '',
+        childId: personId,
         symptomId: result.intent.symptomId,
         label: result.intent.label,
         severity: result.intent.severity,
@@ -182,7 +189,7 @@ export function VoiceScreen({ autoStart = false, onDone }: { autoStart?: boolean
       const at = new Date(result.intent.timestamp);
       setDraft({
         kind: 'dose',
-        childId: result.intent.childId ?? activeChild?.id ?? '',
+        childId: personId,
         medicationId: result.intent.medicationId,
         query: result.intent.medicationQuery,
         candidates: result.intent.candidateIds,
@@ -202,7 +209,7 @@ export function VoiceScreen({ autoStart = false, onDone }: { autoStart?: boolean
   function save() {
     if (!data || !draft) return;
     if (!draft.childId) {
-      setError('Welches Kind?');
+      setError('Bitte eine Person wählen.');
       return;
     }
     if (draft.kind === 'temperature') {
@@ -411,12 +418,27 @@ export function VoiceScreen({ autoStart = false, onDone }: { autoStart?: boolean
         <Card>
           <Body>Das wird gespeichert</Body>
           <Muted>{summary}</Muted>
-          {data && data.children.length > 1 ? (
+          {data && (data.children.length > 1 || !draft.childId) ? (
             <Segmented
-              label="Kind"
+              label="Person"
               value={draft.childId}
               options={data.children.map((child) => ({ value: child.id, label: child.name }))}
-              onChange={(childId) => setDraft({ ...draft, childId })}
+              onChange={(childId) => {
+                const person = data.children.find((item) => item.id === childId);
+                setDraft({
+                  ...draft,
+                  childId,
+                  ...(draft.kind === 'temperature' && person ? { method: person.defaultMethod } : {}),
+                });
+                if (person) {
+                  setSummary((current) => {
+                    const text = current ?? '';
+                    return text.startsWith('Welche Person')
+                      ? `Eingetragen: ${person.name}, ${text.replace(/^Welche Person ist gemeint\?\s*/, '')}`
+                      : text.replace(/^Eingetragen: [^,]+/, `Eingetragen: ${person.name}`);
+                  });
+                }
+              }}
             />
           ) : null}
           {draft.kind === 'temperature' ? (

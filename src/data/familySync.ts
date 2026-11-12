@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { AppData } from '../domain/types';
+import { migrateAppData } from './migrate';
 
 const LOCAL_INVITES = 'kindkrank.local-invites';
 
@@ -25,10 +26,10 @@ function newToken(): string {
 }
 
 export function buildInviteMessage(token: string, synced: boolean): string {
-  const lines = ['Einladung zu Kindkrank', `kindkrank://invite/${token}`, `Code: ${token}`];
+  const lines = ['Einladung zur Familie in Familien-Gesundheit', `kindkrank://invite/${token}`, `Code: ${token}`];
   const base = process.env.EXPO_PUBLIC_INVITE_WEB_BASE;
   if (base) lines.push(`${base.replace(/\/$/, '')}/invite/${token}`);
-  else lines.push('Eine https-Seite ist noch nicht eingerichtet. In Kindkrank den Code unter Einstellungen einfügen.');
+  else lines.push('Eine https-Seite ist noch nicht eingerichtet. In Familien-Gesundheit den Code unter Einstellungen einfügen. Die Einladung gilt für die ganze Familie.');
   if (synced) lines.push('Die Einträge werden über den gemeinsamen Ordner geteilt. Die Einladung gilt 7 Tage.');
   else lines.push('Synchronisation ist noch nicht aktiv. Es werden keine Einträge übertragen, bis Supabase eingerichtet ist.');
   return lines.join('\n');
@@ -49,9 +50,9 @@ export async function pullFamilyDocument(familyId: string): Promise<AppData | nu
   await ensureUser();
   const result = await supabase.from('family_documents').select('payload').eq('family_id', familyId).maybeSingle();
   if (result.error || !result.data?.payload) return null;
-  const payload = result.data.payload as AppData;
-  if (!payload || payload.version !== 3) return null;
-  return { ...payload, settings: { ...payload.settings, familyId } };
+  const migrated = migrateAppData(result.data.payload);
+  if (!migrated) return null;
+  return { ...migrated, settings: { ...migrated.settings, familyId } };
 }
 
 export async function pushFamilyDocument(familyId: string, data: AppData): Promise<void> {

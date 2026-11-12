@@ -1,38 +1,32 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AppData } from '../domain/types';
+import { migrateAppData } from './migrate';
 import type { KindkrankRepository } from './repository';
 
-export const STORAGE_KEY = 'kindkrank.v3';
+export const STORAGE_KEY = 'kindkrank.v4';
+const LEGACY_KEYS = ['kindkrank.v3', 'kindkrank.v2'];
 
 type KeyValueStore = {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
 };
 
-function isAppData(value: unknown): value is AppData {
-  if (!value || typeof value !== 'object') return false;
-  const data = value as AppData;
-  return (
-    data.version === 3 &&
-    Array.isArray(data.children) &&
-    Array.isArray(data.temperatures) &&
-    Array.isArray(data.caregivers) &&
-    Array.isArray(data.vaccinations) &&
-    Array.isArray(data.symptoms)
-  );
-}
-
 export function createAsyncStorageRepository(storage: KeyValueStore = AsyncStorage): KindkrankRepository {
   return {
     async load() {
-      const raw = await storage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      try {
-        const parsed: unknown = JSON.parse(raw);
-        return isAppData(parsed) ? parsed : null;
-      } catch {
-        return null;
+      for (const key of [STORAGE_KEY, ...LEGACY_KEYS]) {
+        const raw = await storage.getItem(key);
+        if (!raw) continue;
+        try {
+          const migrated = migrateAppData(JSON.parse(raw) as unknown);
+          if (!migrated) continue;
+          if (key !== STORAGE_KEY) await storage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+          return migrated;
+        } catch {
+          continue;
+        }
       }
+      return null;
     },
     async save(data) {
       await storage.setItem(STORAGE_KEY, JSON.stringify(data));

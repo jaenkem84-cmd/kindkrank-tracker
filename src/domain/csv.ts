@@ -13,8 +13,10 @@ export function toCsv(headers: string[], rows: string[][]): string {
   return `\uFEFF${lines.join('\r\n')}\r\n`;
 }
 
-function childName(data: AppData, childId: string): string {
-  return data.children.find((child) => child.id === childId)?.name ?? '';
+function personFields(data: AppData, personId: string): string[] {
+  const person = data.children.find((item) => item.id === personId);
+  const typ = person?.personType === 'erwachsen' ? 'Erwachsener' : person ? 'Kind' : '';
+  return [personId, person?.name ?? '', typ];
 }
 
 function stamp(iso: string): string {
@@ -28,13 +30,17 @@ function flag(value: boolean): string {
 }
 
 export function buildExportFiles(data: AppData): CsvFile[] {
-  const kinder = toCsv(
-    ['id', 'name', 'geburtsdatum', 'geschlecht', 'rahmenfarbe', 'beispiel', 'angelegt_am'],
+  const personen = toCsv(
+    ['id', 'name', 'person_typ', 'geburtsdatum', 'geschlecht', 'rolle', 'das_bin_ich', 'standard_messart', 'rahmenfarbe', 'beispiel', 'angelegt_am'],
     data.children.map((child) => [
       child.id,
       child.name,
+      child.personType === 'erwachsen' ? 'Erwachsener' : 'Kind',
       child.birthDate,
       child.sex,
+      child.role,
+      flag(child.isSelf),
+      child.defaultMethod,
       child.frameColor,
       flag(child.isExample),
       stamp(child.createdAt),
@@ -42,11 +48,10 @@ export function buildExportFiles(data: AppData): CsvFile[] {
   );
 
   const temperatur = toCsv(
-    ['id', 'kind_id', 'kind', 'zeitpunkt', 'celsius', 'methode', 'notiz', 'beispiel'],
+    ['id', 'person_id', 'person', 'person_typ', 'zeitpunkt', 'celsius', 'methode', 'notiz', 'beispiel'],
     data.temperatures.map((entry) => [
       entry.id,
-      entry.childId,
-      childName(data, entry.childId),
+      ...personFields(data, entry.childId),
       stamp(entry.timestamp),
       String(entry.celsius).replace('.', ','),
       entry.method,
@@ -56,11 +61,10 @@ export function buildExportFiles(data: AppData): CsvFile[] {
   );
 
   const medikamente = toCsv(
-    ['id', 'kind_id', 'kind', 'name', 'dosis', 'mindestabstand_stunden', 'max_gaben_24h', 'beispiel'],
+    ['id', 'person_id', 'person', 'person_typ', 'name', 'dosis', 'mindestabstand_stunden', 'max_gaben_24h', 'beispiel'],
     data.medications.map((med) => [
       med.id,
-      med.childId,
-      childName(data, med.childId),
+      ...personFields(data, med.childId),
       med.name,
       med.doseText,
       String(med.minIntervalHours).replace('.', ','),
@@ -71,11 +75,10 @@ export function buildExportFiles(data: AppData): CsvFile[] {
 
   const medName = (id: string) => data.medications.find((med) => med.id === id)?.name ?? '';
   const gaben = toCsv(
-    ['id', 'kind_id', 'kind', 'medikament_id', 'medikament', 'zeitpunkt', 'gegeben_von', 'dosis', 'trotz_hinweis', 'notiz', 'beispiel'],
+    ['id', 'person_id', 'person', 'person_typ', 'medikament_id', 'medikament', 'zeitpunkt', 'gegeben_von', 'dosis', 'trotz_hinweis', 'notiz', 'beispiel'],
     data.doses.map((dose) => [
       dose.id,
-      dose.childId,
-      childName(data, dose.childId),
+      ...personFields(data, dose.childId),
       dose.medicationId,
       medName(dose.medicationId),
       stamp(dose.timestamp),
@@ -88,11 +91,10 @@ export function buildExportFiles(data: AppData): CsvFile[] {
   );
 
   const wachstum = toCsv(
-    ['id', 'kind_id', 'kind', 'zeitpunkt', 'gewicht_kg', 'groesse_cm', 'kopfumfang_cm', 'beispiel'],
+    ['id', 'person_id', 'person', 'person_typ', 'zeitpunkt', 'gewicht_kg', 'groesse_cm', 'kopfumfang_cm', 'beispiel'],
     data.growth.map((entry) => [
       entry.id,
-      entry.childId,
-      childName(data, entry.childId),
+      ...personFields(data, entry.childId),
       stamp(entry.timestamp),
       entry.weightKg === undefined ? '' : String(entry.weightKg).replace('.', ','),
       entry.heightCm === undefined ? '' : String(entry.heightCm).replace('.', ','),
@@ -106,11 +108,10 @@ export function buildExportFiles(data: AppData): CsvFile[] {
     data.caregivers.map((person) => [person.id, person.name, person.role, flag(person.isOwner)]),
   );
   const erinnerungen = toCsv(
-    ['id', 'kind_id', 'kind', 'art', 'medikament_id', 'medikament', 'aktiv', 'modus', 'uhrzeiten', 'stunden_danach'],
+    ['id', 'person_id', 'person', 'person_typ', 'art', 'medikament_id', 'medikament', 'aktiv', 'modus', 'uhrzeiten', 'stunden_danach'],
     data.reminders.map((reminder) => [
       reminder.id,
-      reminder.childId,
-      childName(data, reminder.childId),
+      ...personFields(data, reminder.childId),
       reminder.kind,
       reminder.medicationId ?? '',
       reminder.medicationId ? medName(reminder.medicationId) : '',
@@ -122,11 +123,10 @@ export function buildExportFiles(data: AppData): CsvFile[] {
   );
 
   const impfungen = toCsv(
-    ['id', 'kind_id', 'kind', 'zeitpunkt', 'handelsname', 'antigene', 'charge', 'arzt', 'notiz', 'beispiel'],
+    ['id', 'person_id', 'person', 'person_typ', 'zeitpunkt', 'handelsname', 'antigene', 'charge', 'arzt', 'notiz', 'beispiel'],
     data.vaccinations.map((entry) => [
       entry.id,
-      entry.childId,
-      childName(data, entry.childId),
+      ...personFields(data, entry.childId),
       stamp(entry.timestamp),
       entry.productName,
       entry.antigens.join(' '),
@@ -137,11 +137,10 @@ export function buildExportFiles(data: AppData): CsvFile[] {
     ]),
   );
   const symptome = toCsv(
-    ['id', 'kind_id', 'kind', 'zeitpunkt', 'symptom', 'schwere', 'notiz', 'beispiel'],
+    ['id', 'person_id', 'person', 'person_typ', 'zeitpunkt', 'symptom', 'schwere', 'notiz', 'beispiel'],
     data.symptoms.map((entry) => [
       entry.id,
-      entry.childId,
-      childName(data, entry.childId),
+      ...personFields(data, entry.childId),
       stamp(entry.timestamp),
       entry.label,
       entry.severity === null ? '' : String(entry.severity),
@@ -151,7 +150,7 @@ export function buildExportFiles(data: AppData): CsvFile[] {
   );
 
   return [
-    { name: 'kinder.csv', contents: kinder },
+    { name: 'personen.csv', contents: personen },
     { name: 'temperatur.csv', contents: temperatur },
     { name: 'medikamente.csv', contents: medikamente },
     { name: 'gaben.csv', contents: gaben },

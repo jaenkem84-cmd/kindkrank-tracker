@@ -6,20 +6,31 @@ export type Appearance = 'system' | 'light' | 'dark';
 
 export type Sex = 'maedchen' | 'junge';
 
+export type PersonType = 'kind' | 'erwachsen';
+
 export const FRAME_COLORS = ['#3B82F6', '#E85A9B', '#F5A524', '#3DDC97', '#EF4444', '#8B5CF6'] as const;
 
 export const CAREGIVER_ROLES = ['Vater', 'Mutter', 'Oma', 'Opa', 'Andere'] as const;
 
-export type Child = {
+export type Person = {
   id: string;
   name: string;
   /** ISO date YYYY-MM-DD */
   birthDate: string;
   sex: Sex;
+  personType: PersonType;
+  /** Spoken role such as Mutter or Vater. Empty when the person has none. */
+  role: string;
+  /** The person who uses this phone. Voice phrases like "meine Temperatur" use this. */
+  isSelf: boolean;
+  defaultMethod: MeasurementMethod;
   frameColor: string;
   isExample: boolean;
   createdAt: string;
 };
+
+/** Entries still store this id as childId. It is the person id. */
+export type Child = Person;
 
 export type Caregiver = {
   id: string;
@@ -128,8 +139,8 @@ export type SymptomEntry = {
 };
 
 export type AppData = {
-  version: 3;
-  children: Child[];
+  version: 4;
+  children: Person[];
   caregivers: Caregiver[];
   temperatures: TemperatureEntry[];
   medications: Medication[];

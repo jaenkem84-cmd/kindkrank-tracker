@@ -25,6 +25,11 @@ function activeAfter(data: AppData, children: Child[]): string | null {
   return children[0]?.id ?? null;
 }
 
+export function setActivePerson(data: AppData, personId: string): AppData {
+  if (!data.children.some((person) => person.id === personId)) return data;
+  return { ...data, settings: { ...data.settings, activeChildId: personId } };
+}
+
 export function saveChild(data: AppData, child: Child): AppData {
   const children = replaceById(data.children, child);
   const activeChildId = data.settings.activeChildId ?? child.id;

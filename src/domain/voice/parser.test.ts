@@ -152,4 +152,74 @@ describe('Sprachparser', () => {
     assert.equal(result.intent.type, 'temperature');
     assert.equal(result.parserId, 'rules-de');
   });
+
+  it('ordnet „meine Temperatur“ der Person mit „Das bin ich“ zu', () => {
+    const result = parseUtterance(
+      'meine Temperatur ist 38 Grad',
+      context({
+        activeChildId: 'anna',
+        children: [
+          { id: 'michael', name: 'Michael', role: 'Vater', isSelf: true, defaultMethod: 'oral' },
+          { id: 'anna', name: 'Anna', defaultMethod: 'rektal' },
+        ],
+      }),
+    );
+    assert.equal(result.intent.type, 'temperature');
+    if (result.intent.type !== 'temperature') return;
+    assert.equal(result.intent.childId, 'michael');
+    assert.equal(result.intent.method, 'oral');
+    assert.equal(result.intent.celsius, 38);
+    assert.match(result.summary, /^Eingetragen: Michael, /);
+    assert.equal(result.personAmbiguous, false);
+  });
+
+  it('erkennt Name, Possessiv und Rolle', () => {
+    const family = context({
+      activeChildId: 'michael',
+      children: [
+        { id: 'michael', name: 'Michael', role: 'Vater', isSelf: true, defaultMethod: 'oral' },
+        { id: 'partner', name: 'Partnerin', role: 'Mutter', defaultMethod: 'axillar' },
+        { id: 'anna', name: 'Anna', defaultMethod: 'rektal' },
+      ],
+    });
+    const byName = parseUtterance('Anna hat 38,5', family);
+    assert.equal(byName.intent.type, 'temperature');
+    if (byName.intent.type === 'temperature') {
+      assert.equal(byName.intent.childId, 'anna');
+      assert.equal(byName.intent.celsius, 38.5);
+      assert.equal(byName.intent.method, 'rektal');
+    }
+    const possessive = parseUtterance('Annas Temperatur 37,9', family);
+    if (possessive.intent.type === 'temperature') assert.equal(possessive.intent.childId, 'anna');
+    const mama = parseUtterance('Mama hat 38', family);
+    if (mama.intent.type === 'temperature') {
+      assert.equal(mama.intent.childId, 'partner');
+      assert.equal(mama.intent.method, 'axillar');
+    }
+  });
+
+  it('lässt einen Satz ohne Person bei der ausgewählten Person', () => {
+    const result = parseUtterance('Temperatur 38 Grad', context());
+    if (result.intent.type !== 'temperature') return;
+    assert.equal(result.intent.childId, 'anna');
+    assert.equal(result.personAmbiguous, false);
+  });
+
+  it('fragt nach, wenn Name und Rolle verschiedene Personen treffen', () => {
+    const result = parseUtterance(
+      'Anna Mama 38,5',
+      context({
+        children: [
+          { id: 'partner', name: 'Partnerin', role: 'Mutter', defaultMethod: 'axillar' },
+          { id: 'anna', name: 'Anna', defaultMethod: 'rektal' },
+        ],
+      }),
+    );
+    assert.equal(result.personAmbiguous, true);
+    assert.equal(result.intent.type, 'temperature');
+    if (result.intent.type !== 'temperature') return;
+    assert.equal(result.intent.childId, null);
+    assert.deepEqual(result.personCandidateIds?.slice().sort(), ['anna', 'partner']);
+    assert.match(result.summary, /Welche Person ist gemeint/);
+  });
 });

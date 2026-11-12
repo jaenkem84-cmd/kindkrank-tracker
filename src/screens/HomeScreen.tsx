@@ -1,10 +1,12 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Avatar, CategoryIcon, IconButton, MenuIcon } from '../components/chrome';
 import { MicIcon } from '../components/ui';
-import { formatAgeWeeks, formatDayHeading, formatTime, sameBerlinDay } from '../domain/dates';
+import { ageMonths, formatAgeWeeks, formatDayHeading, formatTime, sameBerlinDay } from '../domain/dates';
 import { formatDecimal } from '../domain/format';
 import { forChild } from '../domain/select';
+import type { Person } from '../domain/types';
 import type { CategoryName } from '../navigation/types';
+import { setActivePerson } from '../data/mutations';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
 
@@ -36,13 +38,13 @@ export function HomeScreen({
   onCategory: (name: CategoryName) => void;
 }) {
   const theme = useTheme();
-  const { data, activeChild } = useStore();
+  const { data, activeChild, update } = useStore();
   if (!data || !activeChild) {
     return (
       <View style={{ flex: 1, padding: 24, justifyContent: 'center', gap: 12 }}>
-        <Text style={{ color: theme.text, fontSize: 22 }}>Noch kein Kind.</Text>
+        <Text style={{ color: theme.text, fontSize: 22 }}>Noch keine Person.</Text>
         <Pressable onPress={onProfile} style={{ minHeight: 56, borderRadius: 16, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ color: theme.onAccent, fontSize: 17, fontWeight: '700' }}>Kind anlegen</Text>
+          <Text style={{ color: theme.onAccent, fontSize: 17, fontWeight: '700' }}>Person anlegen</Text>
         </Pressable>
       </View>
     );
@@ -67,13 +69,42 @@ export function HomeScreen({
           <MenuIcon color={theme.text} />
         </IconButton>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: theme.text, fontSize: 28, fontWeight: '700' }}>{activeChild.name}</Text>
-          <Text style={{ color: theme.muted, fontSize: 15 }}>{formatAgeWeeks(activeChild.birthDate, now)}</Text>
+          <Text style={{ color: theme.text, fontSize: 22, fontWeight: '700' }}>Familien-Gesundheit</Text>
+          <Text style={{ color: theme.muted, fontSize: 14 }}>{activeChild.name} · {personAge(activeChild, now)}</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Profil" onPress={onProfile}>
           <Avatar name={activeChild.name} color={activeChild.frameColor} />
         </Pressable>
       </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 8, paddingBottom: 4 }}>
+        {data.children.map((person) => {
+          const selected = person.id === activeChild.id;
+          return (
+            <Pressable
+              key={person.id}
+              accessibilityRole="button"
+              accessibilityLabel={person.name}
+              accessibilityState={{ selected }}
+              onPress={() => update((current) => setActivePerson(current, person.id))}
+              style={{
+                minWidth: 92,
+                borderRadius: 16,
+                paddingVertical: 8,
+                paddingHorizontal: 8,
+                alignItems: 'center',
+                gap: 4,
+                backgroundColor: theme.card,
+                borderWidth: selected ? 2 : 1,
+                borderColor: selected ? person.frameColor : theme.border,
+              }}
+            >
+              <Avatar name={person.name} color={person.frameColor} size={36} />
+              <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700' }}>{person.name}</Text>
+              <Text style={{ color: theme.muted, fontSize: 11 }}>{person.personType === 'kind' ? 'Kind' : 'Erwachsener'}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 18, minHeight: 48 }}>
         <IconButton label="Vorheriger Tag" onPress={() => onShiftDay(-1)}>
           <Text style={{ color: theme.text, fontSize: 22 }}>‹</Text>
@@ -124,7 +155,7 @@ export function HomeScreen({
           </View>
         )}
         {activeChild.isExample ? (
-          <Text style={{ color: theme.muted, fontSize: 13 }}>Anna ist ein Beispiel und kann in den Einstellungen gelöscht werden.</Text>
+          <Text style={{ color: theme.muted, fontSize: 13 }}>Beispieldaten. In den Einstellungen löschen.</Text>
         ) : null}
       </ScrollView>
       <Pressable
@@ -137,19 +168,25 @@ export function HomeScreen({
         <Text style={{ color: theme.onAccent, fontSize: 18, fontWeight: '800' }}>Spracheingabe</Text>
       </Pressable>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 8, gap: 4, paddingBottom: 8 }}>
-        {CATEGORIES.map((category) => (
+        {CATEGORIES.filter((category) => activeChild.personType === 'kind' || category.id !== 'head').map((category) => (
           <Pressable
             key={category.id}
             accessibilityRole="button"
             accessibilityLabel={category.label}
             onPress={() => onCategory(category.id)}
-            style={{ width: 92, minHeight: 78, alignItems: 'center', justifyContent: 'center', gap: 4 }}
+            style={{ width: 64, minHeight: 78, alignItems: 'center', justifyContent: 'center', gap: 2 }}
           >
             <CategoryIcon name={category.id} color={theme.text} />
-            <Text style={{ color: theme.text, fontSize: 12, textAlign: 'center' }}>{category.label}</Text>
+            <Text style={{ color: theme.text, fontSize: 10, lineHeight: 12, textAlign: 'center', width: 64 }}>{category.label}</Text>
           </Pressable>
         ))}
       </ScrollView>
     </View>
   );
+}
+
+function personAge(person: Person, now: Date): string {
+  if (person.personType === 'kind') return formatAgeWeeks(person.birthDate, now);
+  const years = Math.floor(ageMonths(person.birthDate, now) / 12);
+  return `${years} Jahre`;
 }

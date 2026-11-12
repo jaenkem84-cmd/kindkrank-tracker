@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native';
-import { ageMonths, formatDate } from '../../domain/dates';
+import { ageMonths, formatDate, formatDateTime } from '../../domain/dates';
 import { formatDecimal } from '../../domain/format';
 import type { GrowthEntry, Sex } from '../../domain/types';
 import { PERCENTILES, nearestPercentile, percentileCurve, type GrowthMetric } from '../../domain/who/who';
@@ -25,6 +25,7 @@ export function GrowthChart({
   onLabelEvery,
   selectedId = null,
   onSelectId,
+  showReference = true,
 }: {
   metric: GrowthMetric;
   sex: Sex | null;
@@ -36,8 +37,22 @@ export function GrowthChart({
   onLabelEvery: (months: number) => void;
   selectedId?: string | null;
   onSelectId?: (id: string) => void;
+  /** WHO percentiles. Adults use a plain curve. */
+  showReference?: boolean;
 }) {
   const theme = useTheme();
+  if (!showReference) {
+    return (
+      <PlainGrowthChart
+        metric={metric}
+        entries={entries}
+        months={months}
+        onMonths={onMonths}
+        selectedId={selectedId}
+        onSelectId={onSelectId}
+      />
+    );
+  }
   const field = FIELD[metric];
   const unit = UNIT[metric];
   const measured = entries
@@ -140,6 +155,103 @@ export function GrowthChart({
       <Text style={{ color: theme.muted, fontSize: 12 }}>
         Alter in Monaten. {sex ? 'Kurven: WHO-Perzentile.' : 'Geschlecht im Profil fehlt, deshalb keine Perzentile.'}
       </Text>
+    </View>
+  );
+}
+
+function PlainGrowthChart({
+  metric,
+  entries,
+  months,
+  onMonths,
+  selectedId = null,
+  onSelectId,
+}: {
+  metric: GrowthMetric;
+  entries: GrowthEntry[];
+  months: number;
+  onMonths: (months: number) => void;
+  selectedId?: string | null;
+  onSelectId?: (id: string) => void;
+}) {
+  const theme = useTheme();
+  const field = FIELD[metric];
+  const unit = UNIT[metric];
+  const windowDays = months >= 60 ? 1825 : months >= 24 ? 730 : 365;
+  const stamped = entries
+    .filter((entry) => entry[field] !== undefined)
+    .map((entry) => ({ entry, at: new Date(entry.timestamp).getTime() }))
+    .filter((item) => Number.isFinite(item.at))
+    .sort((a, b) => a.at - b.at);
+  const end = stamped.length > 0 ? stamped[stamped.length - 1].at : Date.now();
+  const start = end - windowDays * 86_400_000;
+  const measured = stamped
+    .filter((item) => item.at >= start && item.at <= end)
+    .map((item) => {
+      const value = item.entry[field] as number;
+      return {
+        id: item.entry.id,
+        x: (item.at - start) / 86_400_000,
+        value,
+        label: `${formatDateTime(new Date(item.entry.timestamp))} · ${formatDecimal(value, metric === 'weight' ? 1 : 1)} ${unit}`,
+      };
+    });
+  const values = measured.map((point) => point.value);
+  const yMin = Math.min(...values);
+  const yMax = Math.max(...values);
+  const pad = (yMax - yMin) * 0.12 || 1;
+  const yStep = metric === 'weight' ? 2 : 5;
+  const yTicks = [];
+  if (Number.isFinite(yMin)) {
+    const yStart = Math.floor((yMin - pad) / yStep) * yStep;
+    for (let value = yStart; value <= yMax + pad; value += yStep) yTicks.push({ y: value, label: formatDecimal(value, 0) });
+  }
+  const labelCount = 4;
+  const xLabels = [];
+  const verticals = [];
+  for (let index = 0; index <= labelCount; index += 1) {
+    const day = (windowDays / labelCount) * index;
+    xLabels.push({ x: day, label: formatDate(new Date(start + day * 86_400_000)).slice(0, 6) });
+    verticals.push({ x: day, strong: index === 0 || index === labelCount });
+  }
+
+  return (
+    <View style={{ gap: 8 }}>
+      <ChoiceRow
+        label="Zeitraum"
+        value={String(months)}
+        options={[
+          { value: '12', label: '1 Jahr' },
+          { value: '24', label: '2 Jahre' },
+          { value: '60', label: '5 Jahre' },
+        ]}
+        onChange={(value) => onMonths(Number(value))}
+      />
+      {Number.isFinite(yMin) ? (
+        <ChartFrame
+          height={320}
+          xDomain={[0, windowDays]}
+          yDomain={[yMin - pad, yMax + pad]}
+          yTicks={yTicks}
+          xLabels={xLabels}
+          verticals={verticals}
+          horizontals={[]}
+          yUnit={unit}
+          selectedId={selectedId}
+          onSelectId={onSelectId}
+          series={[{ points: measured.map((point) => ({ x: point.x, y: point.value })), color: '#3DB8B0', width: 2.1 }]}
+          points={measured.map((point) => ({
+            id: point.id,
+            x: point.x,
+            y: point.value,
+            label: point.label,
+            fill: '#3DB8B0',
+          }))}
+        />
+      ) : (
+        <Text style={{ color: theme.muted, fontSize: 14 }}>Noch keine Werte in diesem Zeitraum.</Text>
+      )}
+      <Text style={{ color: theme.muted, fontSize: 12 }}>Kurve ohne Perzentile. Zeitraum bis zur letzten Messung.</Text>
     </View>
   );
 }

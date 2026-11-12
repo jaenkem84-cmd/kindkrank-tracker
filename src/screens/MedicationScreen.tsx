@@ -50,7 +50,7 @@ export function MedicationScreen({
 }) {
   const theme = useTheme();
   const { data, activeChild } = useStore();
-  if (!data || !activeChild) return <Body>Lege zuerst ein Kind an.</Body>;
+  if (!data || !activeChild) return <Body>Lege zuerst eine Person an.</Body>;
   const meds = forChild(data.medications, activeChild.id);
   const doses = forChild(data.doses, activeChild.id);
   return (

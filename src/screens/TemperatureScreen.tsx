@@ -26,7 +26,7 @@ export function TemperatureScreen({ now, onEdit, onAdd }: { now: Date; onEdit: (
     const y = rowY.current[selectedId];
     if (y !== undefined) scroller.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
   }, [selectedId]);
-  if (!data || !activeChild) return <Body>Lege zuerst ein Kind an.</Body>;
+  if (!data || !activeChild) return <Body>Lege zuerst eine Person an.</Body>;
   const own = forChild(data.temperatures, activeChild.id);
   const listed = [...own].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   const reminder = data.reminders.find((item) => item.childId === activeChild.id && item.kind === 'temperature');
@@ -94,7 +94,9 @@ export function TemperatureForm({ entryId, onDone }: { entryId?: string; onDone:
   const existing = data?.temperatures.find((entry) => entry.id === entryId);
   const initial = existing ? new Date(existing.timestamp) : new Date();
   const [celsius, setCelsius] = useState(existing ? String(existing.celsius).replace('.', ',') : '');
-  const [method, setMethod] = useState<MeasurementMethod>(existing?.method ?? data?.settings.defaultMethod ?? 'rektal');
+  const [method, setMethod] = useState<MeasurementMethod>(
+    existing?.method ?? activeChild?.defaultMethod ?? data?.settings.defaultMethod ?? 'rektal',
+  );
   const [date, setDate] = useState(dateFieldValue(initial));
   const [time, setTime] = useState(timeFieldValue(initial));
   const [note, setNote] = useState(existing?.note ?? '');

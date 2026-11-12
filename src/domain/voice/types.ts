@@ -1,6 +1,12 @@
 import type { MeasurementMethod } from '../types';
 
-export type ParserChild = { id: string; name: string };
+export type ParserChild = {
+  id: string;
+  name: string;
+  role?: string;
+  isSelf?: boolean;
+  defaultMethod?: MeasurementMethod;
+};
 
 export type ParserMedication = {
   id: string;
@@ -68,6 +74,9 @@ export type ParseResult = {
   intent: Intent;
   summary: string;
   parserId: string;
+  /** More than one person matched the sentence. */
+  personAmbiguous?: boolean;
+  personCandidateIds?: string[];
 };
 
 /**

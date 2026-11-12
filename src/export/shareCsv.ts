@@ -19,7 +19,7 @@ async function shareOnWeb(filename: string, bytes: Uint8Array): Promise<void> {
     const canShareFiles = typeof nav.canShare !== 'function' || nav.canShare({ files: [webFile] });
     if (canShareFiles) {
       try {
-        await nav.share({ files: [webFile], title: 'Kindkrank-Export' });
+        await nav.share({ files: [webFile], title: 'Familien-Gesundheit Export' });
         return;
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -53,7 +53,7 @@ export async function shareAllData(data: AppData, now = new Date()): Promise<voi
   }
   await Sharing.shareAsync(destination.uri, {
     mimeType: 'application/zip',
-    dialogTitle: 'Kindkrank-Daten exportieren',
+    dialogTitle: 'Familien-Gesundheit exportieren',
     UTI: 'public.zip-archive',
   });
 }

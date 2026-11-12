@@ -17,7 +17,7 @@ export function SymptomScreen({ now }: { now: Date }) {
   const [note, setNote] = useState('');
   const [severity, setSeverity] = useState<1 | 2 | 3 | null>(null);
   const [error, setError] = useState<string | null>(null);
-  if (!data || !activeChild) return <Body>Lege zuerst ein Kind an.</Body>;
+  if (!data || !activeChild) return <Body>Lege zuerst eine Person an.</Body>;
   const entries = forChild(data.symptoms, activeChild.id).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
   function save(label: string, symptomId: string | null) {

@@ -1,4 +1,6 @@
-# Kindkrank-Tracker
+# Familien-Gesundheit
+
+Die Oberfläche heißt vorerst Familien-Gesundheit. Paketname, Slug `kindkrank-tracker` und die App-ID `de.kindkrank.tracker` bleiben, damit Expo und EAS weiter funktionieren. „Kind“ bleibt dort stehen, wo es um Kinder geht.
 
 Eine ruhige Android-App für Eltern, die ein krankes Kind im Blick behalten: Temperatur, selbst eingetragene Medikamente, Gewicht und Wachstum. Die Oberfläche ist Deutsch, die Zeiten Europe/Berlin, das Datum `TT.MM.JJJJ`, die Uhr 24 Stunden. Einheiten: °C, mg/ml als freier Dosistest, kg, cm.
 
@@ -141,7 +143,7 @@ Das Schema nutzt Zeilensicherheit: nur Mitglieder einer Familie lesen und schrei
 
 ## Daten, Export, Familie
 
-Alles geht durch `KindkrankRepository` (`src/data/repository.ts`). Die mitgelieferte Umsetzung `createAsyncStorageRepository` schreibt ein JSON-Dokument unter dem Schlüssel `kindkrank.v1`. Die Bildschirme kennen den Speicher nicht.
+Alles geht durch `KindkrankRepository` (`src/data/repository.ts`). Die mitgelieferte Umsetzung `createAsyncStorageRepository` schreibt ein JSON-Dokument unter dem Schlüssel `kindkrank.v4`. Ein vorhandenes `kindkrank.v3` wird beim Laden zu Personen: jedes bisherige Kind wird Typ Kind, die Eintrags-IDs bleiben. Die Bildschirme kennen den Speicher nicht.
 
 CSV-Export unter Mehr schreibt eine ZIP-Datei mit:
 

@@ -24,18 +24,20 @@ export function GrowthScreen({
   onAdd: () => void;
 }) {
   const theme = useTheme();
-  const [months, setMonths] = useState(24);
+  const { data, activeChild } = useStore();
+  const adult = activeChild?.personType === 'erwachsen';
+  const [months, setMonths] = useState(adult ? 60 : 24);
   const [labelEvery, setLabelEvery] = useState(4);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const scroller = useRef<{ scrollTo: (options: { y: number; animated?: boolean }) => void } | null>(null);
   const rowY = useRef<Record<string, number>>({});
-  const { data, activeChild } = useStore();
   useEffect(() => {
     if (!selectedId) return;
     const y = rowY.current[selectedId];
     if (y !== undefined) scroller.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
   }, [selectedId]);
-  if (!data || !activeChild) return <Body>Lege zuerst ein Kind an.</Body>;
+  if (!data || !activeChild) return <Body>Lege zuerst eine Person an.</Body>;
+  if (adult && metric === 'head') return <Body>Kopfumfang gibt es nur für Kinder.</Body>;
   const entries = forChild(data.growth, activeChild.id).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   const field = metric === 'weight' ? 'weightKg' : metric === 'height' ? 'heightCm' : 'headCm';
   const listed = [...entries].reverse().filter((entry) => entry[field] !== undefined);
@@ -56,6 +58,7 @@ export function GrowthScreen({
             onLabelEvery={setLabelEvery}
             selectedId={selectedId}
             onSelectId={setSelectedId}
+            showReference={!adult}
           />
         </Card>
       </View>
@@ -121,7 +124,8 @@ export function GrowthForm({ entryId, onDone }: { entryId?: string; onDone: () =
 
   function save() {
     if (!data || !activeChild) return;
-    const weightKg = optional(weight, 0.5, 80, 'Gewicht in kg');
+    const adult = activeChild.personType === 'erwachsen';
+    const weightKg = optional(weight, adult ? 20 : 0.5, adult ? 250 : 80, 'Gewicht in kg');
     if (weightKg === 'invalid') return;
     const heightCm = optional(height, 30, 220, 'Größe in cm');
     if (heightCm === 'invalid') return;
@@ -176,9 +180,11 @@ export function GrowthForm({ entryId, onDone }: { entryId?: string; onDone: () =
       }
     >
       <Muted>Gewicht ist während einer Krankheit oft das Wichtigste, zum Beispiel bei starkem Gewichtsverlust.</Muted>
-      <TextField label="Gewicht in kg" value={weight} onChangeText={setWeight} placeholder="9,6" keyboard="decimal-pad" />
+      <TextField label="Gewicht in kg" value={weight} onChangeText={setWeight} placeholder={activeChild?.personType === 'erwachsen' ? '82,4' : '9,6'} keyboard="decimal-pad" />
       <TextField label="Größe in cm" value={height} onChangeText={setHeight} placeholder="optional" keyboard="decimal-pad" />
-      <TextField label="Kopfumfang in cm" value={head} onChangeText={setHead} placeholder="optional" keyboard="decimal-pad" />
+      {activeChild?.personType === 'kind' ? (
+        <TextField label="Kopfumfang in cm" value={head} onChangeText={setHead} placeholder="optional" keyboard="decimal-pad" />
+      ) : null}
       <DateTimeFields date={date} time={time} onChange={(nextDate, nextTime) => { setDate(nextDate); setTime(nextTime); }} />
     </Screen>
   );

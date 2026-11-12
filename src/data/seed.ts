@@ -142,18 +142,48 @@ function exampleSymptoms(childId: string): SymptomEntry[] {
  * Vaccinations follow the shape of the STIKO 2026 infant schedule and are example data only.
  */
 export function createSeedData(now: Date): AppData {
+  const michael: Child = {
+    id: createId('kind'),
+    name: 'Michael',
+    birthDate: '1984-06-12',
+    sex: 'junge',
+    personType: 'erwachsen',
+    role: 'Vater',
+    isSelf: true,
+    defaultMethod: 'oral',
+    frameColor: '#3B82F6',
+    isExample: true,
+    createdAt: now.toISOString(),
+  };
+  const partner: Child = {
+    id: createId('kind'),
+    name: 'Partnerin',
+    birthDate: '1986-09-04',
+    sex: 'maedchen',
+    personType: 'erwachsen',
+    role: 'Mutter',
+    isSelf: false,
+    defaultMethod: 'axillar',
+    frameColor: '#8B5CF6',
+    isExample: true,
+    createdAt: now.toISOString(),
+  };
   const anna: Child = {
     id: createId('kind'),
     name: 'Anna',
     birthDate: '2025-01-15',
     sex: 'maedchen',
+    personType: 'kind',
+    role: '',
+    isSelf: false,
+    defaultMethod: 'rektal',
     frameColor: '#E85A9B',
     isExample: true,
     createdAt: now.toISOString(),
   };
   const papa: Caregiver = {
     id: createId('person'),
-    name: 'Papa',
+    name: 'Michael',
     role: 'Vater',
     isOwner: true,
   };
@@ -243,21 +273,65 @@ export function createSeedData(now: Date): AppData {
   for (const [day, headCm] of HEAD) growthOf(day).headCm = headCm;
   for (const [day, weightKg] of WEIGHT) growthOf(day).weightKg = weightKg;
 
+  const adultTemp = (day: string, time: string, celsius: number): TemperatureEntry => ({
+    id: createId('temp'),
+    childId: michael.id,
+    timestamp: at(day, time),
+    celsius,
+    method: 'oral',
+    note: '',
+    isExample: true,
+  });
+  const adultWeight = (day: string, weightKg: number): GrowthEntry => ({
+    id: createId('wuchs'),
+    childId: michael.id,
+    timestamp: at(day, '08:00'),
+    weightKg,
+    isExample: true,
+  });
+
   return {
-    version: 3,
-    children: [anna],
+    version: 4,
+    children: [michael, partner, anna],
     caregivers: [papa],
-    temperatures,
+    temperatures: [
+      ...temperatures,
+      adultTemp('08.11.2026', '07:10', 36.6),
+      adultTemp('09.11.2026', '21:40', 37.8),
+      adultTemp('10.11.2026', '08:05', 38.4),
+      adultTemp('11.11.2026', '19:15', 37.9),
+      adultTemp('12.11.2026', '07:40', 36.9),
+    ],
     medications: [ibuprofen, paracetamol, prospan],
     doses,
-    growth: [...byDay.values()],
-    vaccinations: exampleVaccinations(anna.id),
+    growth: [
+      ...byDay.values(),
+      adultWeight('12.11.2024', 82.4),
+      adultWeight('01.06.2025', 81.1),
+      adultWeight('15.03.2026', 83.0),
+      adultWeight('01.11.2026', 82.6),
+    ],
+    vaccinations: [
+      ...exampleVaccinations(anna.id),
+      {
+        id: createId('impf'),
+        childId: michael.id,
+        timestamp: at('14.04.2014', '09:00'),
+        productId: 'boostrix',
+        productName: 'Boostrix',
+        antigens: ['diphtherie', 'tetanus', 'pertussis'],
+        batch: 'BEISPIEL',
+        doctor: 'Hausarzt Beispiel',
+        note: 'Beispiel, keine echte Impfung.',
+        isExample: true,
+      },
+    ],
     symptoms: exampleSymptoms(anna.id),
     reminders: [],
     settings: {
       defaultMethod: 'rektal',
-      defaultGivenBy: 'Papa',
-      activeChildId: anna.id,
+      defaultGivenBy: 'Michael',
+      activeChildId: michael.id,
       appearance: 'system',
       familyId: null,
     },

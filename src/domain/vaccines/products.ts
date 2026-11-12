@@ -22,7 +22,10 @@ export type AntigenId =
   | 'mumps'
   | 'roeteln'
   | 'varizellen'
-  | 'menacwy';
+  | 'menacwy'
+  | 'influenza'
+  | 'covid19'
+  | 'herpesZoster';
 
 export const ANTIGEN_LABELS: Record<AntigenId, string> = {
   diphtherie: 'Diphtherie',
@@ -39,6 +42,9 @@ export const ANTIGEN_LABELS: Record<AntigenId, string> = {
   roeteln: 'Röteln',
   varizellen: 'Varizellen',
   menacwy: 'Meningokokken ACWY',
+  influenza: 'Influenza',
+  covid19: 'COVID-19',
+  herpesZoster: 'Herpes zoster',
 };
 
 const SIX = ['diphtherie', 'tetanus', 'pertussis', 'hib', 'polio', 'hepatitisB'] as const;
@@ -71,7 +77,11 @@ export const VACCINE_PRODUCTS: readonly VaccineProduct[] = [
   { id: 'menquadfi', name: 'MenQuadfi', antigens: ['menacwy'] },
   { id: 'rotarix', name: 'Rotarix', antigens: ['rotaviren'], note: 'Schluckimpfung, meist 2 Dosen. Zeitfenster laut Fachinformation.' },
   { id: 'rotateq', name: 'RotaTeq', antigens: ['rotaviren'], note: 'Schluckimpfung, meist 3 Dosen. Zeitfenster laut Fachinformation.' },
-  { id: 'boostrix', name: 'Boostrix', antigens: ['diphtherie', 'tetanus', 'pertussis'], note: 'Tdap-Auffrischung, nicht die Säuglings-Grundimmunisierung.' },
+  { id: 'boostrix', name: 'Boostrix', antigens: ['diphtherie', 'tetanus', 'pertussis'], note: 'Tdap-Auffrischung, nicht die Säuglings-Grundimmunisierung. Fachinformation prüfen.' },
+  { id: 'td-pur', name: 'Td-pur', antigens: ['diphtherie', 'tetanus'], note: 'Td ohne Pertussis. Fachinformation prüfen.' },
+  { id: 'influvac', name: 'Influvac', antigens: ['influenza'], note: 'Saisonimpfstoff. Fachinformation prüfen.' },
+  { id: 'comirnaty', name: 'Comirnaty', antigens: ['covid19'], note: 'COVID-19. Variante und Schema prüfen.' },
+  { id: 'shingrix', name: 'Shingrix', antigens: ['herpesZoster'], note: 'Herpes zoster, meist zwei Dosen. Fachinformation prüfen.' },
 ];
 
 export function productById(id: string | null | undefined): VaccineProduct | undefined {

@@ -7,6 +7,7 @@ import { createId } from '../domain/ids';
 import { forChild } from '../domain/select';
 import { ANTIGEN_LABELS, VACCINE_PRODUCTS, productById, type AntigenId } from '../domain/vaccines/products';
 import { matchVaccineLabel } from '../domain/vaccines/matcher';
+import { ADULT_STIKO_SOURCE, adultVaccinationStatus } from '../domain/vaccines/adultStiko';
 import { STATUS_LABEL, STIKO_SOURCE, vaccinationStatus } from '../domain/vaccines/stiko';
 import type { VaccinationEntry } from '../domain/types';
 import { removeVaccination, saveVaccination } from '../data/mutations';
@@ -20,18 +21,28 @@ export function VaccinationScreen({ now, onAdd }: { now: Date; onAdd: (productId
   const theme = useTheme();
   const { data, activeChild, update } = useStore();
   const [scanOpen, setScanOpen] = useState(false);
-  if (!data || !activeChild) return <Body>Lege zuerst ein Kind an.</Body>;
+  if (!data || !activeChild) return <Body>Lege zuerst eine Person an.</Body>;
+  const adult = activeChild.personType === 'erwachsen';
   const entries = forChild(data.vaccinations, activeChild.id).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  const status = vaccinationStatus(
-    activeChild.birthDate,
-    data.vaccinations.filter((entry) => entry.childId === activeChild.id),
-    now,
-  );
-  const doctorText = buildDoctorText(activeChild.name, activeChild.birthDate, activeChild.sex === 'maedchen' ? 'Mädchen' : 'Junge', entries, status, now);
+  const ownDoses = data.vaccinations.filter((entry) => entry.childId === activeChild.id);
+  const status = adult ? adultVaccinationStatus(activeChild.birthDate, ownDoses, now) : vaccinationStatus(activeChild.birthDate, ownDoses, now);
+  const source = adult ? ADULT_STIKO_SOURCE : STIKO_SOURCE;
+  const sexLabel = adult
+    ? activeChild.sex === 'junge'
+      ? 'männlich'
+      : 'weiblich'
+    : activeChild.sex === 'maedchen'
+      ? 'Mädchen'
+      : 'Junge';
+  const doctorText = buildDoctorText(activeChild.name, activeChild.birthDate, sexLabel, entries, status, now);
 
   return (
     <View style={{ gap: 14 }}>
-      <Banner tone="info">Orientierung nach STIKO, keine ärztliche Beurteilung. Bitte mit Kinderarzt abklären.</Banner>
+      <Banner tone="info">
+        {adult
+          ? 'Orientierung nach STIKO für Erwachsene. Quelle bitte prüfen. Keine ärztliche Beurteilung.'
+          : 'Orientierung nach STIKO, keine ärztliche Beurteilung. Bitte mit Kinderarzt abklären.'}
+      </Banner>
       <Button label="Impfung eintragen" onPress={onAdd} />
       <Button label="Impfpass fotografieren" variant="secondary" onPress={() => setScanOpen(true)} />
       {scanOpen ? (
@@ -68,7 +79,7 @@ export function VaccinationScreen({ now, onAdd }: { now: Date; onAdd: (productId
           <Button compact label="Löschen" variant="danger" onPress={() => update((current) => removeVaccination(current, entry.id))} />
         </Card>
       ))}
-      <Muted>{STIKO_SOURCE}</Muted>
+      <Muted>{source}</Muted>
     </View>
   );
 }

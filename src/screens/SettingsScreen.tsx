@@ -15,6 +15,7 @@ import {
   type Caregiver,
   type Child,
   type MeasurementMethod,
+  type PersonType,
   type Sex,
 } from '../domain/types';
 import { acceptFamilyInvite, createFamilyInvite } from '../data/familySync';
@@ -55,8 +56,8 @@ export function SettingsScreen({
         </Pressable>
       ) : null}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Body>Mein Kind</Body>
-        <Pressable accessibilityRole="button" accessibilityLabel="Kind hinzufügen" onPress={onAddChild} style={{ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}>
+        <Body>Familie</Body>
+        <Pressable accessibilityRole="button" accessibilityLabel="Person hinzufügen" onPress={onAddChild} style={{ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ color: theme.accent, fontSize: 28 }}>+</Text>
         </Pressable>
       </View>
@@ -67,13 +68,18 @@ export function SettingsScreen({
               <Avatar name={child.name} color={child.frameColor} size={48} />
               <View style={{ flex: 1 }}>
                 <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>{child.name}{child.isExample ? ' · Beispiel' : ''}</Text>
-                <Muted>geboren {isoDateToGerman(child.birthDate)}</Muted>
+                <Muted>
+                  {child.personType === 'kind' ? 'Kind' : 'Erwachsener'}
+                  {child.isSelf ? ' · Das bin ich' : child.role ? ` · ${child.role}` : ''}
+                  {child.birthDate ? ` · ${isoDateToGerman(child.birthDate)}` : ''}
+                </Muted>
               </View>
               <Text style={{ color: theme.muted, fontSize: 18 }}>✎</Text>
             </View>
           </Card>
         </Pressable>
       ))}
+      <Muted>Die Einladung gilt für die ganze Familie, nicht für eine einzelne Person.</Muted>
       <Body>Familienmitglied</Body>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
         {snapshot.caregivers.map((person) => (
@@ -127,7 +133,7 @@ export function SettingsScreen({
       {familyNote ? <Muted>{familyNote}</Muted> : null}
       <Body>Allgemeines</Body>
       <Segmented
-        label="Standard-Messart"
+        label="Standard-Messart für neue Personen"
         value={snapshot.settings.defaultMethod}
         options={MEASUREMENT_METHODS.map((method) => ({ value: method, label: METHOD_LABELS[method] }))}
         onChange={(defaultMethod: MeasurementMethod) => update((current) => saveSettings(current, { ...current.settings, defaultMethod }))}
@@ -163,7 +169,7 @@ export function SettingsScreen({
         <Button label="Beispieldaten löschen" variant="danger" onPress={() => update(deleteExampleData)} />
       ) : null}
       <Muted>{MEDICAL_DISCLAIMER}</Muted>
-      <Muted>Kindkrank-Tracker {Constants.expoConfig?.version ?? '1.0.0'}</Muted>
+      <Muted>Familien-Gesundheit {Constants.expoConfig?.version ?? '1.0.0'}</Muted>
     </View>
   );
 }
@@ -193,9 +199,12 @@ export function ProfileScreen({ childId, onDone }: { childId?: string; onDone: (
   const owner = data?.caregivers.find((person) => person.isOwner);
   const [name, setName] = useState(existing?.name ?? '');
   const [sex, setSex] = useState<Sex>(existing?.sex ?? 'maedchen');
+  const [personType, setPersonType] = useState<PersonType>(existing?.personType ?? 'kind');
   const [birth, setBirth] = useState(existing ? isoDateToGerman(existing.birthDate) : '');
   const [color, setColor] = useState(existing?.frameColor ?? FRAME_COLORS[1]);
-  const [role, setRole] = useState(owner?.role ?? 'Vater');
+  const [role, setRole] = useState(existing?.role || owner?.role || '');
+  const [isSelf, setIsSelf] = useState(existing?.isSelf ?? false);
+  const [method, setMethod] = useState<MeasurementMethod>(existing?.defaultMethod ?? (existing?.personType === 'erwachsen' ? 'oral' : 'rektal'));
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -203,7 +212,7 @@ export function ProfileScreen({ childId, onDone }: { childId?: string; onDone: (
     if (!data) return;
     const parsed = parseGermanDate(birth);
     if (!name.trim()) {
-      setError('Wie heißt das Kind?');
+      setError('Wie heißt die Person?');
       return;
     }
     if (!parsed) {
@@ -215,14 +224,21 @@ export function ProfileScreen({ childId, onDone }: { childId?: string; onDone: (
       name: name.trim(),
       birthDate: birthDateToIso(parsed),
       sex,
+      personType,
+      role,
+      isSelf,
+      defaultMethod: method,
       frameColor: color,
       isExample: existing?.isExample ?? false,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
     };
     update((current) => {
       const withChild = saveChild(current, child);
-      if (!owner) return withChild;
-      return saveCaregiver(withChild, { ...owner, role });
+      const marked = isSelf
+        ? { ...withChild, children: withChild.children.map((person) => ({ ...person, isSelf: person.id === child.id })) }
+        : withChild;
+      if (!owner || !isSelf) return marked;
+      return saveCaregiver(marked, { ...owner, name: child.name, role: role || owner.role });
     });
     onDone();
   }
@@ -235,8 +251,8 @@ export function ProfileScreen({ childId, onDone }: { childId?: string; onDone: (
       dialog={
         <ConfirmDialog
           visible={confirmDelete}
-          title="Kind löschen?"
-          message="Messungen, Medikamente und Gaben dieses Kindes werden mit gelöscht."
+          title="Person löschen?"
+          message="Messungen, Medikamente und Gaben dieser Person werden mit gelöscht."
           confirmLabel="Wirklich löschen"
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => {
@@ -253,23 +269,57 @@ export function ProfileScreen({ childId, onDone }: { childId?: string; onDone: (
       </View>
       <TextField label="Name" value={name} onChangeText={setName} />
       <Segmented
+        label="Art"
+        value={personType}
+        options={[
+          { value: 'kind' as PersonType, label: 'Kind' },
+          { value: 'erwachsen' as PersonType, label: 'Erwachsener' },
+        ]}
+        onChange={(next) => {
+          setPersonType(next);
+          setMethod((current) => (next === 'erwachsen' && current === 'rektal' ? 'oral' : current));
+        }}
+      />
+      <Segmented
         label="Geschlecht"
         value={sex}
-        options={[
-          { value: 'junge' as Sex, label: 'Junge' },
-          { value: 'maedchen' as Sex, label: 'Mädchen' },
-        ]}
+        options={
+          personType === 'erwachsen'
+            ? [
+                { value: 'junge' as Sex, label: 'männlich' },
+                { value: 'maedchen' as Sex, label: 'weiblich' },
+              ]
+            : [
+                { value: 'junge' as Sex, label: 'Junge' },
+                { value: 'maedchen' as Sex, label: 'Mädchen' },
+              ]
+        }
         onChange={setSex}
       />
       <TextField label="Geburtstag" value={birth} onChangeText={setBirth} placeholder="TT.MM.JJJJ" />
+      <Segmented
+        label="Das bin ich"
+        value={isSelf ? 'ja' : 'nein'}
+        options={[
+          { value: 'ja', label: 'Ja' },
+          { value: 'nein', label: 'Nein' },
+        ]}
+        onChange={(value) => setIsSelf(value === 'ja')}
+      />
+      <Segmented label="Rolle für die Spracheingabe" value={role || 'keine'} options={[{ value: 'keine', label: 'keine' }, ...CAREGIVER_ROLES.map((item) => ({ value: item, label: item }))]} onChange={(value) => setRole(value === 'keine' ? '' : value)} />
+      <Segmented
+        label="Standard-Messart"
+        value={method}
+        options={MEASUREMENT_METHODS.map((item) => ({ value: item, label: METHOD_LABELS[item] }))}
+        onChange={setMethod}
+      />
       <Body>Rahmenfarbe</Body>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         {FRAME_COLORS.map((item) => (
           <Pressable key={item} accessibilityRole="button" onPress={() => setColor(item)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: item, borderWidth: color === item ? 3 : 0, borderColor: '#fff' }} />
         ))}
       </View>
-      <Segmented label="Beziehung zum Kind" value={role} options={CAREGIVER_ROLES.map((item) => ({ value: item, label: item }))} onChange={setRole} />
-      {existing ? <Button label="Kind löschen" variant="danger" onPress={() => setConfirmDelete(true)} /> : null}
+      {existing ? <Button label="Person löschen" variant="danger" onPress={() => setConfirmDelete(true)} /> : null}
     </Screen>
   );
 }

@@ -8,7 +8,7 @@ const STOP = new Set([
   'ich', 'habe', 'hab', 'ihm', 'ihr', 'dem', 'den', 'der', 'die', 'das', 'ein', 'eine', 'einen',
   'mal', 'bitte', 'noch', 'schon', 'gerade', 'eben', 'jetzt', 'heute', 'gestern', 'gegeben',
   'verabreicht', 'eingenommen', 'genommen', 'fuer', 'mit', 'und', 'am', 'um', 'uhr', 'kind',
-  'bei', 'von', 'auf', 'ist', 'war', 'grad', 'celsius', 'temperatur', 'fieber', 'fiebert',
+  'bei', 'von', 'auf', 'ist', 'war', 'hat', 'hatte', 'grad', 'celsius', 'temperatur', 'fieber', 'fiebert',
   'gewicht', 'wiegt', 'kilo', 'kg', 'groesse', 'laenge', 'kopfumfang', 'cm', 'im',
 ]);
 
@@ -68,17 +68,49 @@ function extractWhen(folded: string, now: Date): { at: Date; rest: string } {
   return { at: now, rest };
 }
 
-function extractChild(rest: string, context: ParseContext): { childId: string | null; rest: string } {
-  const ordered = [...context.children].sort((a, b) => foldSpeech(b.name).length - foldSpeech(a.name).length);
-  for (const child of ordered) {
-    const folded = foldSpeech(child.name);
-    if (!folded) continue;
-    const pattern = new RegExp(`\\b${escapeRegExp(folded)}\\b`);
-    if (pattern.test(rest)) {
-      return { childId: child.id, rest: cleanup(rest.replace(pattern, ' ')) };
+function resolvePersons(folded: string, context: ParseContext): { ids: string[]; explicit: boolean } {
+  const ids = new Set<string>();
+  let explicit = false;
+  if (/\b(ich|meine|meiner|meinem|mein)\b/.test(folded)) {
+    const selves = context.children.filter((child) => child.isSelf);
+    if (selves.length > 0) {
+      explicit = true;
+      selves.forEach((child) => ids.add(child.id));
     }
   }
-  return { childId: null, rest };
+  const ordered = [...context.children].sort((a, b) => foldSpeech(b.name).length - foldSpeech(a.name).length);
+  for (const child of ordered) {
+    const name = foldSpeech(child.name);
+    if (name.length < 2) continue;
+    const pattern = new RegExp(`\\b${escapeRegExp(name)}s?\\b`);
+    if (pattern.test(folded)) {
+      explicit = true;
+      ids.add(child.id);
+    }
+  }
+  const roles: [RegExp, string][] = [
+    [/\b(mama|mamas|mutti|mutter)\b/, 'mutter'],
+    [/\b(papa|papas|papi|vater)\b/, 'vater'],
+  ];
+  for (const [pattern, role] of roles) {
+    if (!pattern.test(folded)) continue;
+    const matches = context.children.filter((child) => foldSpeech(child.role ?? '') === role);
+    if (matches.length === 0) continue;
+    explicit = true;
+    matches.forEach((child) => ids.add(child.id));
+  }
+  return { ids: [...ids], explicit };
+}
+
+function stripPersonWords(rest: string, context: ParseContext): string {
+  let next = rest.replace(/\b(ich|meine|meiner|meinem|mein|mama|mamas|mutti|mutter|papa|papas|papi|vater)\b/g, ' ');
+  const ordered = [...context.children].sort((a, b) => foldSpeech(b.name).length - foldSpeech(a.name).length);
+  for (const child of ordered) {
+    const name = foldSpeech(child.name);
+    if (name.length < 2) continue;
+    next = next.replace(new RegExp(`\\b${escapeRegExp(name)}s?\\b`, 'g'), ' ');
+  }
+  return cleanup(next);
 }
 
 function extractMethod(rest: string, fallback: MeasurementMethod): { method: MeasurementMethod; rest: string } {
@@ -175,18 +207,27 @@ function matchMedications(
   };
 }
 
-function resolveChildId(spokenChildId: string | null, context: ParseContext): string | null {
-  return spokenChildId ?? context.activeChildId;
-}
-
 function childName(context: ParseContext, childId: string | null): string {
   if (!childId) return '';
   return context.children.find((child) => child.id === childId)?.name ?? '';
 }
 
-function withChild(summary: string, context: ParseContext, childId: string | null): string {
+function present(
+  context: ParseContext,
+  childId: string | null,
+  ambiguous: boolean,
+  candidateIds: string[],
+  body: string,
+): Pick<ParseResult, 'summary' | 'personAmbiguous' | 'personCandidateIds'> {
+  if (ambiguous) {
+    return {
+      summary: `Welche Person ist gemeint? ${body}`,
+      personAmbiguous: true,
+      personCandidateIds: candidateIds,
+    };
+  }
   const name = childName(context, childId);
-  return name ? `${name}: ${summary}` : summary;
+  return { summary: name ? `Eingetragen: ${name}, ${body}` : body, personAmbiguous: false };
 }
 
 function doseTextFor(context: ParseContext, medicationId: string | null): string | null {
@@ -217,19 +258,24 @@ function parseRules(text: string, context: ParseContext): ParseResult {
     return finish('rules-de', { type: 'unknown', text }, 'Sag zum Beispiel: Temperatur jetzt 38,2.');
   }
   const timed = extractWhen(folded, context.now);
-  let rest = timed.rest;
-  const hasTemp = /\b(temperatur|fiebert|fieber|grad)\b/.test(rest);
-  const hasDose = /\b(gegeben|verabreicht|eingenommen|genommen)\b/.test(rest);
-  const hasWeight = /\b(gewicht|wiegt|kilo|kg)\b/.test(rest);
-  const hasHeight = /\b(groesse|laenge)\b/.test(rest);
-  const hasHead = /\bkopfumfang\b/.test(rest);
+  const hasTemp = /\b(temperatur|fiebert|fieber|grad)\b/.test(timed.rest);
+  const hasDose = /\b(gegeben|verabreicht|eingenommen|genommen)\b/.test(timed.rest);
+  const hasWeight = /\b(gewicht|wiegt|kilo|kg)\b/.test(timed.rest);
+  const hasHeight = /\b(groesse|laenge)\b/.test(timed.rest);
+  const hasHead = /\bkopfumfang\b/.test(timed.rest);
 
-  const spoken = extractChild(rest, context);
-  rest = spoken.rest;
-  const methodResult = extractMethod(rest, context.defaultMethod);
-  rest = methodResult.rest;
-  const childId = resolveChildId(spoken.childId, context);
+  const person = resolvePersons(folded, context);
+  const ambiguous = person.ids.length > 1;
+  const spokenId = person.ids.length === 1 ? person.ids[0] : null;
+  const childId = ambiguous ? null : (spokenId ?? context.activeChildId);
+  const fallbackMethod = context.children.find((child) => child.id === childId)?.defaultMethod ?? context.defaultMethod;
+  const methodResult = extractMethod(stripPersonWords(timed.rest, context), fallbackMethod);
+  let rest = methodResult.rest;
   const when = timed.at.toISOString();
+  const say = (intent: Intent, body: string): ParseResult => {
+    const shown = present(context, 'childId' in intent ? intent.childId : null, ambiguous, person.ids, body);
+    return { parserId: 'rules-de', intent, ...shown };
+  };
 
   if ((hasWeight || hasHeight || hasHead) && !hasTemp && !hasDose) {
     const weight = hasWeight ? extractWeight(rest) : null;
@@ -243,8 +289,7 @@ function parseRules(text: string, context: ParseContext): ParseResult {
         height ? `${formatDecimal(height.value, 1)} cm Größe` : null,
         head ? `${formatDecimal(head.value, 1)} cm Kopf` : null,
       ].filter(Boolean);
-      return finish(
-        'rules-de',
+      return say(
         {
           type: 'growth',
           childId,
@@ -253,7 +298,7 @@ function parseRules(text: string, context: ParseContext): ParseResult {
           heightCm: height?.value ?? null,
           headCm: head?.value ?? null,
         },
-        withChild(`${bits.join(', ')}, ${formatDateTime(timed.at)}`, context, childId),
+        `${formatDateTime(timed.at)}, ${bits.join(', ')}`,
       );
     }
   }
@@ -265,8 +310,7 @@ function parseRules(text: string, context: ParseContext): ParseResult {
     if (!celsius) {
       return finish('rules-de', { type: 'unknown', text }, 'Die Temperatur habe ich nicht als Zahl erkannt.');
     }
-    return finish(
-      'rules-de',
+    return say(
       {
         type: 'temperature',
         childId,
@@ -274,11 +318,7 @@ function parseRules(text: string, context: ParseContext): ParseResult {
         celsius: celsius.value,
         method: methodResult.method,
       },
-      withChild(
-        `Temperatur ${formatDecimal(celsius.value, 1)} °C, ${METHOD_LABELS[methodResult.method]}, ${formatDateTime(timed.at)}`,
-        context,
-        childId,
-      ),
+      `${formatDateTime(timed.at)}, ${formatDecimal(celsius.value, 1)} °C ${METHOD_LABELS[methodResult.method]}`,
     );
   }
 
@@ -286,8 +326,7 @@ function parseRules(text: string, context: ParseContext): ParseResult {
     const symptom = matchSymptom(folded);
     if (symptom) {
       const severity = /\bstark\b/.test(folded) ? 3 : /\bleicht\b/.test(folded) ? 1 : null;
-      return finish(
-        'rules-de',
+      return say(
         {
           type: 'symptom',
           childId,
@@ -296,7 +335,7 @@ function parseRules(text: string, context: ParseContext): ParseResult {
           label: symptomLabel(symptom),
           severity,
         },
-        withChild(`${symptomLabel(symptom)}, ${formatDateTime(timed.at)}`, context, childId),
+        `${formatDateTime(timed.at)}, ${symptomLabel(symptom)}`,
       );
     }
   }
@@ -305,7 +344,7 @@ function parseRules(text: string, context: ParseContext): ParseResult {
   if (tryDose && query) {
     let match = matchMedications(query, context.medications, childId);
     let resolvedChild = childId;
-    if (!match.id && match.candidates.length === 0 && !spoken.childId) {
+    if (!match.id && match.candidates.length === 0 && !person.explicit) {
       const anyChild = matchMedications(query, context.medications, null);
       if (anyChild.id || anyChild.candidates.length > 0) {
         match = anyChild;
@@ -319,11 +358,10 @@ function parseRules(text: string, context: ParseContext): ParseResult {
       const medName = match.id
         ? context.medications.find((med) => med.id === match.id)?.name ?? query
         : query;
-      return finish(
-        'rules-de',
+      return say(
         {
           type: 'dose',
-          childId: resolvedChild,
+          childId: ambiguous ? null : resolvedChild,
           timestamp: when,
           medicationId: match.id,
           medicationQuery: query,
@@ -331,13 +369,9 @@ function parseRules(text: string, context: ParseContext): ParseResult {
           doseText: doseTextFor(context, match.id),
           givenBy: context.defaultGivenBy,
         },
-        withChild(
-          match.id
-            ? `${medName} geben, ${formatDateTime(timed.at)}`
-            : `Medikament „${query}“ ist noch nicht eindeutig. Bitte prüfen.`,
-          context,
-          resolvedChild,
-        ),
+        match.id
+          ? `${formatDateTime(timed.at)}, ${medName} geben`
+          : `Medikament „${query}“ ist noch nicht eindeutig. Bitte prüfen.`,
       );
     }
   }
