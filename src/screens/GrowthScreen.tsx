@@ -27,7 +27,6 @@ export function GrowthScreen({
   const { data, activeChild } = useStore();
   const adult = activeChild?.personType === 'erwachsen';
   const [months, setMonths] = useState(adult ? 60 : 24);
-  const [labelEvery, setLabelEvery] = useState(4);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const scroller = useRef<{ scrollTo: (options: { y: number; animated?: boolean }) => void } | null>(null);
   const rowY = useRef<Record<string, number>>({});
@@ -53,9 +52,7 @@ export function GrowthScreen({
             birthDate={activeChild.birthDate}
             entries={entries}
             months={months}
-            labelEvery={labelEvery}
             onMonths={setMonths}
-            onLabelEvery={setLabelEvery}
             selectedId={selectedId}
             onSelectId={setSelectedId}
             showReference={!adult}
@@ -66,35 +63,47 @@ export function GrowthScreen({
         ref={(node) => {
           scroller.current = node;
         }}
-        contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 28 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, gap: 8, paddingBottom: 28 }}
       >
-      {listed.map((entry) => (
-        <Pressable
-          key={entry.id}
-          accessibilityRole="button"
-          onLayout={(event) => {
-            rowY.current[entry.id] = event.nativeEvent.layout.y;
-          }}
-          onPress={() => setSelectedId(entry.id)}
-        >
-          <Card>
-            <Text style={{ color: entry.id === selectedId ? '#3DB8B0' : theme.text, fontSize: 18, fontWeight: '700' }}>
-              {formatDateTime(new Date(entry.timestamp))}
-            </Text>
-            <Body>
-              {[
-                entry.weightKg !== undefined ? `${formatDecimal(entry.weightKg, 2)} kg` : null,
-                entry.heightCm !== undefined ? `${formatDecimal(entry.heightCm, 1)} cm Größe` : null,
-                entry.headCm !== undefined ? `${formatDecimal(entry.headCm, 1)} cm Kopf` : null,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </Body>
-            {entry.isExample ? <Muted>Beispieldaten</Muted> : null}
-            <Button compact label="Ändern" variant="secondary" onPress={() => onEdit(entry.id)} />
-          </Card>
-        </Pressable>
-      ))}
+      {listed.map((entry) => {
+        const selected = entry.id === selectedId;
+        const value = [
+          entry.weightKg !== undefined ? `${formatDecimal(entry.weightKg, 2)} kg` : null,
+          entry.heightCm !== undefined ? `${formatDecimal(entry.heightCm, 1)} cm` : null,
+          entry.headCm !== undefined ? `${formatDecimal(entry.headCm, 1)} cm Kopf` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        return (
+          <View
+            key={entry.id}
+            onLayout={(event) => {
+              rowY.current[entry.id] = event.nativeEvent.layout.y;
+            }}
+            style={{
+              minHeight: 52,
+              borderRadius: 12,
+              borderWidth: selected ? 1.5 : 1,
+              borderColor: selected ? '#3DB8B0' : theme.border,
+              backgroundColor: theme.card,
+              flexDirection: 'row',
+              alignItems: 'center',
+            }}
+          >
+            <Pressable accessibilityRole="button" onPress={() => setSelectedId(entry.id)} style={{ flex: 1, paddingLeft: 12, paddingVertical: 6, justifyContent: 'center' }}>
+              <Text style={{ color: selected ? '#3DB8B0' : theme.text, fontSize: 16, lineHeight: 20, fontWeight: '700' }} numberOfLines={1}>
+                {value}
+              </Text>
+              <Text style={{ color: theme.muted, fontSize: 12, lineHeight: 16 }} numberOfLines={1}>
+                {formatDateTime(new Date(entry.timestamp))}
+              </Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="Ändern" onPress={() => onEdit(entry.id)} style={{ width: 44, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ color: theme.muted, fontSize: 22, lineHeight: 24 }}>›</Text>
+            </Pressable>
+          </View>
+        );
+      })}
       </ScrollView>
     </View>
   );

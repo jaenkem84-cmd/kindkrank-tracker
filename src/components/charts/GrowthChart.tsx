@@ -2,6 +2,7 @@ import { Text, View } from 'react-native';
 import { ageMonths, formatDate, formatDateTime } from '../../domain/dates';
 import { formatDecimal } from '../../domain/format';
 import type { GrowthEntry, Sex } from '../../domain/types';
+import { growthAxis } from '../../domain/growthAxis';
 import { PERCENTILES, nearestPercentile, percentileCurve, type GrowthMetric } from '../../domain/who/who';
 import { useTheme } from '../../theme/ThemeProvider';
 import { ChartFrame } from './ChartFrame';
@@ -20,9 +21,7 @@ export function GrowthChart({
   birthDate,
   entries,
   months,
-  labelEvery,
   onMonths,
-  onLabelEvery,
   selectedId = null,
   onSelectId,
   showReference = true,
@@ -32,9 +31,7 @@ export function GrowthChart({
   birthDate: string;
   entries: GrowthEntry[];
   months: number;
-  labelEvery: number;
   onMonths: (months: number) => void;
-  onLabelEvery: (months: number) => void;
   selectedId?: string | null;
   onSelectId?: (id: string) => void;
   /** WHO percentiles. Adults use a plain curve. */
@@ -73,15 +70,9 @@ export function GrowthChart({
   const yMin = Math.min(...bandValues, ...measuredValues);
   const yMax = Math.max(...bandValues, ...measuredValues);
   const pad = (yMax - yMin) * 0.08 || 1;
-  const verticals = [];
-  const labels = [];
-  for (let month = 0; month <= months; month += 1) {
-    verticals.push({ x: month, strong: month % 12 === 0 });
-    if (month % labelEvery === 0) {
-      const label = month === 0 ? '0' : month % 12 === 0 ? `${month / 12} J.` : `${month}`;
-      labels.push({ x: month, label });
-    }
-  }
+  const marks = growthAxis(months);
+  const verticals = marks.map((mark) => ({ x: mark.x, strong: mark.strong }));
+  const labels = marks.map((mark) => ({ x: mark.x, label: mark.label }));
   const yStep = metric === 'weight' ? 2 : 5;
   const yTicks = [];
   const yStart = Math.ceil((yMin - pad) / yStep) * yStep;
@@ -108,16 +99,6 @@ export function GrowthChart({
         ]}
         onChange={(value) => onMonths(Number(value))}
       />
-      <ChoiceRow
-        label="Achse"
-        value={String(labelEvery)}
-        options={[
-          { value: '2', label: '2 Mon.' },
-          { value: '4', label: '4 Mon.' },
-          { value: '6', label: '6 Mon.' },
-        ]}
-        onChange={(value) => onLabelEvery(Number(value))}
-      />
       {Number.isFinite(yMin) ? (
         <ChartFrame
           height={320}
@@ -128,6 +109,7 @@ export function GrowthChart({
           verticals={verticals}
           horizontals={[]}
           yUnit={unit}
+          xLabelSize={9}
           selectedId={selectedId}
           onSelectId={onSelectId}
           endLabels={PERCENTILES.flatMap((band) => {

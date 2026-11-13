@@ -46,6 +46,7 @@ export function ChartFrame({
   selectedId = null,
   onSelectId,
   panHandlers,
+  xLabelSize = 10,
 }: {
   height?: number;
   xDomain: [number, number];
@@ -62,6 +63,7 @@ export function ChartFrame({
   selectedId?: string | null;
   onSelectId?: (id: string) => void;
   panHandlers?: GestureResponderHandlers;
+  xLabelSize?: number;
 }) {
   const theme = useTheme();
   const [width, setWidth] = useState(360);
@@ -211,7 +213,7 @@ export function ChartFrame({
           ) : null,
         )}
         {xLabels.map((tick) => (
-          <SvgText key={`xl-${tick.label}-${tick.x}`} x={xOf(tick.x)} y={height - 8} fill={theme.muted} fontSize={10} textAnchor="middle">
+            <SvgText key={`xl-${tick.label}-${tick.x}`} x={xOf(tick.x)} y={height - 8} fill={theme.muted} fontSize={xLabelSize} textAnchor="middle">
             {tick.label}
           </SvgText>
         ))}

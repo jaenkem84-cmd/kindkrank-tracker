@@ -51,30 +51,37 @@ export function TemperatureScreen({ now, onEdit, onAdd }: { now: Date; onEdit: (
         ref={(node) => {
           scroller.current = node;
         }}
-        contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 28 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, gap: 8, paddingBottom: 28 }}
         keyboardShouldPersistTaps="handled"
       >
         {listed.map((entry) => {
           const selected = entry.id === selectedId;
           return (
-            <Pressable
+            <View
               key={entry.id}
-              accessibilityRole="button"
               onLayout={(event) => {
                 rowY.current[entry.id] = event.nativeEvent.layout.y;
               }}
-              onPress={() => setSelectedId(entry.id)}
+              style={{
+                minHeight: 52,
+                borderRadius: 12,
+                borderWidth: selected ? 1.5 : 1,
+                borderColor: selected ? TEMP_RED : theme.border,
+                backgroundColor: theme.card,
+                flexDirection: 'row',
+                alignItems: 'center',
+              }}
             >
-              <Card>
-                <Text style={{ color: selected ? TEMP_RED : theme.text, fontSize: 22, fontWeight: '700' }}>{formatCelsius(entry.celsius)}</Text>
-                <Body>
+              <Pressable accessibilityRole="button" onPress={() => setSelectedId(entry.id)} style={{ flex: 1, paddingLeft: 12, paddingVertical: 6, justifyContent: 'center' }}>
+                <Text style={{ color: selected ? TEMP_RED : theme.text, fontSize: 16, lineHeight: 20, fontWeight: '700' }}>{formatCelsius(entry.celsius)}</Text>
+                <Text style={{ color: theme.muted, fontSize: 12, lineHeight: 16 }} numberOfLines={1}>
                   {formatDateTime(new Date(entry.timestamp))} · {METHOD_LABELS[entry.method]}
-                </Body>
-                {entry.note ? <Muted>{entry.note}</Muted> : null}
-                {entry.isExample ? <Muted>Beispieldaten</Muted> : null}
-                <Button compact label="Ändern" variant="secondary" onPress={() => onEdit(entry.id)} />
-              </Card>
-            </Pressable>
+                </Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Ändern" onPress={() => onEdit(entry.id)} style={{ width: 44, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: theme.muted, fontSize: 22, lineHeight: 24 }}>›</Text>
+              </Pressable>
+            </View>
           );
         })}
       </ScrollView>

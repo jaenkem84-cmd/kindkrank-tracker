@@ -37,7 +37,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "tsx --test src/domain/medication.test.ts src/domain/illness.test.ts src/domain/voice/parser.test.ts src/domain/who/who.test.ts src/domain/age.test.ts src/domain/vaccines/matcher.test.ts src/domain/vaccines/stiko.test.ts src/domain/vaccines/adultStiko.test.ts src/data/migrate.test.ts src/navigation/linking.test.ts",
+    "test": "tsx --test src/domain/medication.test.ts src/domain/illness.test.ts src/domain/voice/parser.test.ts src/domain/who/who.test.ts src/domain/age.test.ts src/domain/growthAxis.test.ts src/domain/vaccines/matcher.test.ts src/domain/vaccines/stiko.test.ts src/domain/vaccines/adultStiko.test.ts src/data/migrate.test.ts src/navigation/linking.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "private": true
