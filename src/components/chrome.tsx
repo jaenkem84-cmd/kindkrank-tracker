@@ -24,6 +24,21 @@ export function Avatar({ name, color, size = 52 }: { name: string; color: string
   );
 }
 
+export function BellIcon({ color, filled, size = 22 }: { color: string; filled: boolean; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M6.2 9.2a5.8 5.8 0 1 1 11.6 0c0 3.4 1.4 5.1 1.4 5.1H4.8s1.4-1.7 1.4-5.1z"
+        stroke={color}
+        strokeWidth={1.7}
+        fill={filled ? color : 'none'}
+        strokeLinejoin="round"
+      />
+      <Path d="M10 18.2a2 2 0 0 0 4 0" stroke={color} strokeWidth={1.7} fill="none" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 export function MenuIcon({ color }: { color: string }) {
   return (
     <Svg width={26} height={26} viewBox="0 0 24 24">

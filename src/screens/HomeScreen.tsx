@@ -25,7 +25,7 @@ export function HomeScreen({
   day,
   onShiftDay,
   onMenu,
-  onProfile,
+  onFamily,
   onVoice,
   onCategory,
 }: {
@@ -33,7 +33,7 @@ export function HomeScreen({
   day: Date;
   onShiftDay: (delta: number) => void;
   onMenu: () => void;
-  onProfile: () => void;
+  onFamily: () => void;
   onVoice: () => void;
   onCategory: (name: CategoryName) => void;
 }) {
@@ -43,8 +43,8 @@ export function HomeScreen({
     return (
       <View style={{ flex: 1, padding: 24, justifyContent: 'center', gap: 12 }}>
         <Text style={{ color: theme.text, fontSize: 22 }}>Noch keine Person.</Text>
-        <Pressable onPress={onProfile} style={{ minHeight: 56, borderRadius: 16, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ color: theme.onAccent, fontSize: 17, fontWeight: '700' }}>Person anlegen</Text>
+        <Pressable onPress={onFamily} style={{ minHeight: 56, borderRadius: 16, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: theme.onAccent, fontSize: 17, fontWeight: '700' }}>Familie anlegen</Text>
         </Pressable>
       </View>
     );
@@ -56,11 +56,6 @@ export function HomeScreen({
   );
   const today = sameBerlinDay(day, now);
   const empty = temps.length + doses.length + weights.length === 0;
-  const chips = [
-    { label: 'Temperatur', count: temps.length, category: 'temperature' as const },
-    { label: 'Medikation', count: doses.length, category: 'medication' as const },
-    { label: 'Gewicht', count: weights.length, category: 'weight' as const },
-  ];
 
   return (
     <View style={{ flex: 1 }}>
@@ -69,14 +64,16 @@ export function HomeScreen({
           <MenuIcon color={theme.text} />
         </IconButton>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: theme.text, fontSize: 22, fontWeight: '700' }}>Familien-Gesundheit</Text>
-          <Text style={{ color: theme.muted, fontSize: 14 }}>{activeChild.name} · {personAge(activeChild, now)}</Text>
+          <Text style={{ color: theme.text, fontSize: 20, lineHeight: 26, fontWeight: '700' }}>Familien-Gesundheit</Text>
+          <Text style={{ color: theme.muted, fontSize: 13, lineHeight: 18 }}>{activeChild.name} · {personAge(activeChild, now)}</Text>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Profil" onPress={onProfile}>
-          <Avatar name={activeChild.name} color={activeChild.frameColor} />
-        </Pressable>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 8, paddingBottom: 4 }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ height: 84 }}
+        contentContainerStyle={{ paddingHorizontal: 12, gap: 8, alignItems: 'center' }}
+      >
         {data.children.map((person) => {
           const selected = person.id === activeChild.id;
           return (
@@ -87,20 +84,21 @@ export function HomeScreen({
               accessibilityState={{ selected }}
               onPress={() => update((current) => setActivePerson(current, person.id))}
               style={{
-                minWidth: 92,
-                borderRadius: 16,
-                paddingVertical: 8,
-                paddingHorizontal: 8,
+                width: 104,
+                height: 72,
+                borderRadius: 14,
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: 4,
                 backgroundColor: theme.card,
                 borderWidth: selected ? 2 : 1,
                 borderColor: selected ? person.frameColor : theme.border,
               }}
             >
-              <Avatar name={person.name} color={person.frameColor} size={36} />
-              <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700' }}>{person.name}</Text>
-              <Text style={{ color: theme.muted, fontSize: 11 }}>{person.personType === 'kind' ? 'Kind' : 'Erwachsener'}</Text>
+              <Avatar name={person.name} color={person.frameColor} size={28} />
+              <Text style={{ color: theme.text, fontSize: 13, lineHeight: 16, fontWeight: '700' }} numberOfLines={1}>
+                {person.name}
+              </Text>
             </Pressable>
           );
         })}
@@ -115,19 +113,6 @@ export function HomeScreen({
         </IconButton>
       </View>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 24 }}>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          {chips.map((chip) => (
-            <Pressable
-              key={chip.label}
-              accessibilityRole="button"
-              onPress={() => onCategory(chip.category)}
-              style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 16, paddingVertical: 12, alignItems: 'center', backgroundColor: theme.card }}
-            >
-              <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>×{chip.count}</Text>
-              <Text style={{ color: theme.muted, fontSize: 12, textAlign: 'center' }}>{chip.label}</Text>
-            </Pressable>
-          ))}
-        </View>
         {empty ? (
           <View style={{ alignItems: 'center', paddingVertical: 36, gap: 8 }}>
             <Text style={{ color: theme.muted, fontSize: 17, textAlign: 'center' }}>
@@ -167,20 +152,22 @@ export function HomeScreen({
         <MicIcon color={theme.onAccent} size={28} />
         <Text style={{ color: theme.onAccent, fontSize: 18, fontWeight: '800' }}>Spracheingabe</Text>
       </Pressable>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 8, gap: 4, paddingBottom: 8 }}>
+      <View style={{ flexDirection: 'row', paddingHorizontal: 4, paddingBottom: 6 }}>
         {CATEGORIES.filter((category) => activeChild.personType === 'kind' || category.id !== 'head').map((category) => (
           <Pressable
             key={category.id}
             accessibilityRole="button"
             accessibilityLabel={category.label}
             onPress={() => onCategory(category.id)}
-            style={{ width: 64, minHeight: 78, alignItems: 'center', justifyContent: 'center', gap: 2 }}
+            style={{ flex: 1, minHeight: 64, alignItems: 'center', justifyContent: 'center', gap: 2 }}
           >
             <CategoryIcon name={category.id} color={theme.text} />
-            <Text style={{ color: theme.text, fontSize: 10, lineHeight: 12, textAlign: 'center', width: 64 }}>{category.label}</Text>
+            <Text style={{ color: theme.text, fontSize: 10, lineHeight: 12, textAlign: 'center' }} numberOfLines={2}>
+              {category.label}
+            </Text>
           </Pressable>
         ))}
-      </ScrollView>
+      </View>
     </View>
   );
 }

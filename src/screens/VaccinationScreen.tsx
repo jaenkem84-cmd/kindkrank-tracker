@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Banner, Body, Button, Card, ConfirmDialog, DateTimeFields, Muted, Screen, TextField } from '../components/ui';
 import { combineBerlin, dateFieldValue, formatDate, formatDateTime, isoDateToGerman, timeFieldValue } from '../domain/dates';
@@ -37,7 +37,7 @@ export function VaccinationScreen({ now, onAdd }: { now: Date; onAdd: (productId
   const doctorText = buildDoctorText(activeChild.name, activeChild.birthDate, sexLabel, entries, status, now);
 
   return (
-    <View style={{ gap: 14 }}>
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
       <Banner tone="info">
         {adult
           ? 'Orientierung nach STIKO für Erwachsene. Quelle bitte prüfen. Keine ärztliche Beurteilung.'
@@ -56,10 +56,16 @@ export function VaccinationScreen({ now, onAdd }: { now: Date; onAdd: (productId
       ) : null}
       <Body>Impfstatus nach STIKO</Body>
       {status.map((row) => (
-        <View key={row.id} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-          <Text style={{ color: theme.text, fontSize: 16, flex: 1 }}>{row.label}</Text>
-          <Text style={{ color: theme.muted, fontSize: 14 }}>{row.detail}</Text>
-          <Text style={{ color: theme.text, fontSize: 14, fontWeight: '700', width: 118, textAlign: 'right' }}>{STATUS_LABEL[row.status]}</Text>
+        <View key={row.id} style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border, gap: 2 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+            <Text style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 148, color: theme.text, fontSize: 16, lineHeight: 22 }}>
+              {row.label}
+            </Text>
+            <Text style={{ flexGrow: 0, flexShrink: 0, width: 96, textAlign: 'right', color: theme.text, fontSize: 14, lineHeight: 22, fontWeight: '700' }}>
+              {STATUS_LABEL[row.status]}
+            </Text>
+          </View>
+          <Text style={{ color: theme.muted, fontSize: 13, lineHeight: 18 }}>{row.detail}</Text>
         </View>
       ))}
       <Card>
@@ -80,7 +86,7 @@ export function VaccinationScreen({ now, onAdd }: { now: Date; onAdd: (productId
         </Card>
       ))}
       <Muted>{source}</Muted>
-    </View>
+    </ScrollView>
   );
 }
 

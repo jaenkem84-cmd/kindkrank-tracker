@@ -143,7 +143,7 @@ Das Schema nutzt Zeilensicherheit: nur Mitglieder einer Familie lesen und schrei
 
 ## Daten, Export, Familie
 
-Alles geht durch `KindkrankRepository` (`src/data/repository.ts`). Die mitgelieferte Umsetzung `createAsyncStorageRepository` schreibt ein JSON-Dokument unter dem Schlüssel `kindkrank.v4`. Ein vorhandenes `kindkrank.v3` wird beim Laden zu Personen: jedes bisherige Kind wird Typ Kind, die Eintrags-IDs bleiben. Die Bildschirme kennen den Speicher nicht.
+Alles geht durch `KindkrankRepository` (`src/data/repository.ts`). Die mitgelieferte Umsetzung `createAsyncStorageRepository` schreibt ein JSON-Dokument unter dem Schlüssel `kindkrank.v5`. Ältere Stände (`v3`, `v4`) werden beim Laden zu einer Familienliste: bisherige Kinder bleiben Typ Kind, Betreuende wie Michael oder Julia werden Erwachsene in derselben Liste, die Eintrags-IDs bleiben. Die Bildschirme kennen den Speicher nicht.
 
 CSV-Export unter Mehr schreibt eine ZIP-Datei mit:
 

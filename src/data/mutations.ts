@@ -2,6 +2,7 @@ import type {
   AppData,
   Caregiver,
   Child,
+  CustomSymptom,
   DoseEntry,
   GrowthEntry,
   Medication,
@@ -28,6 +29,15 @@ function activeAfter(data: AppData, children: Child[]): string | null {
 export function setActivePerson(data: AppData, personId: string): AppData {
   if (!data.children.some((person) => person.id === personId)) return data;
   return { ...data, settings: { ...data.settings, activeChildId: personId } };
+}
+
+export function markInvited(data: AppData, personId: string): AppData {
+  return {
+    ...data,
+    children: data.children.map((person) =>
+      person.id === personId && !person.isAdmin ? { ...person, joinStatus: 'eingeladen' } : person,
+    ),
+  };
 }
 
 export function saveChild(data: AppData, child: Child): AppData {
@@ -116,6 +126,14 @@ export function saveSymptom(data: AppData, entry: SymptomEntry): AppData {
 
 export function removeSymptom(data: AppData, id: string): AppData {
   return { ...data, symptoms: data.symptoms.filter((entry) => entry.id !== id) };
+}
+
+export function saveCustomSymptom(data: AppData, symptom: CustomSymptom): AppData {
+  return { ...data, customSymptoms: replaceById(data.customSymptoms ?? [], symptom) };
+}
+
+export function removeCustomSymptom(data: AppData, id: string): AppData {
+  return { ...data, customSymptoms: (data.customSymptoms ?? []).filter((entry) => entry.id !== id) };
 }
 
 export function saveReminder(data: AppData, reminder: Reminder): AppData {

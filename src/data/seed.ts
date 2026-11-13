@@ -2,7 +2,6 @@ import { zonedDateTime } from '../domain/dates';
 import { createId } from '../domain/ids';
 import type {
   AppData,
-  Caregiver,
   Child,
   DoseEntry,
   GrowthEntry,
@@ -150,6 +149,8 @@ export function createSeedData(now: Date): AppData {
     personType: 'erwachsen',
     role: 'Vater',
     isSelf: true,
+    isAdmin: true,
+    joinStatus: 'admin',
     defaultMethod: 'oral',
     frameColor: '#3B82F6',
     isExample: true,
@@ -157,12 +158,14 @@ export function createSeedData(now: Date): AppData {
   };
   const partner: Child = {
     id: createId('kind'),
-    name: 'Partnerin',
+    name: 'Julia',
     birthDate: '1986-09-04',
     sex: 'maedchen',
     personType: 'erwachsen',
     role: 'Mutter',
     isSelf: false,
+    isAdmin: false,
+    joinStatus: 'ohne-app',
     defaultMethod: 'axillar',
     frameColor: '#8B5CF6',
     isExample: true,
@@ -176,16 +179,12 @@ export function createSeedData(now: Date): AppData {
     personType: 'kind',
     role: '',
     isSelf: false,
+    isAdmin: false,
+    joinStatus: 'ohne-app',
     defaultMethod: 'rektal',
     frameColor: '#E85A9B',
     isExample: true,
     createdAt: now.toISOString(),
-  };
-  const papa: Caregiver = {
-    id: createId('person'),
-    name: 'Michael',
-    role: 'Vater',
-    isOwner: true,
   };
   const ibuprofen: Medication = {
     id: createId('med'),
@@ -291,9 +290,9 @@ export function createSeedData(now: Date): AppData {
   });
 
   return {
-    version: 4,
+    version: 5,
     children: [michael, partner, anna],
-    caregivers: [papa],
+    caregivers: [],
     temperatures: [
       ...temperatures,
       adultTemp('08.11.2026', '07:10', 36.6),
@@ -327,7 +326,19 @@ export function createSeedData(now: Date): AppData {
       },
     ],
     symptoms: exampleSymptoms(anna.id),
-    reminders: [],
+    customSymptoms: [],
+    reminders: [
+      {
+        id: createId('erinnerung'),
+        childId: anna.id,
+        kind: 'medication',
+        medicationId: ibuprofen.id,
+        enabled: true,
+        mode: 'after',
+        times: [],
+        hoursAfter: 6,
+      },
+    ],
     settings: {
       defaultMethod: 'rektal',
       defaultGivenBy: 'Michael',

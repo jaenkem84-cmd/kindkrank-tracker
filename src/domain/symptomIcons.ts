@@ -1,0 +1,66 @@
+/** MaterialCommunityIcons names. Outline glyphs, one size, no emoji. */
+export const BUILTIN_SYMPTOM_ICONS: Record<string, string> = {
+  husten: 'account-voice',
+  schnupfen: 'water-percent',
+  hals: 'microphone-off',
+  ohr: 'ear-hearing',
+  erbrechen: 'emoticon-sick-outline',
+  durchfall: 'toilet',
+  ausschlag: 'allergy',
+  schlapp: 'sleep',
+  appetit: 'food-off-outline',
+  trinken: 'cup-off-outline',
+  kopf: 'head-alert-outline',
+  bauch: 'stomach',
+  atemnot: 'lungs',
+  krampf: 'lightning-bolt',
+};
+
+/** Palette for symptoms the family adds itself. */
+export const SYMPTOM_ICON_PALETTE = [
+  'account-voice',
+  'water-percent',
+  'microphone-off',
+  'ear-hearing',
+  'emoticon-sick-outline',
+  'toilet',
+  'allergy',
+  'liquid-spot',
+  'sleep',
+  'bed-outline',
+  'food-off-outline',
+  'cup-off-outline',
+  'cup-water',
+  'head-alert-outline',
+  'head-flash',
+  'stomach',
+  'lungs',
+  'air-filter',
+  'weather-fog',
+  'lightning-bolt',
+  'thermometer',
+  'pill',
+  'needle',
+  'bandage',
+  'eye-outline',
+  'tooth-outline',
+  'bone',
+  'brain',
+  'heart-pulse',
+  'stethoscope',
+  'virus-outline',
+  'bacteria-outline',
+  'face-mask',
+  'hand-wash',
+  'arm-flex',
+  'foot-print',
+  'emoticon-frown-outline',
+  'medical-bag',
+  'clipboard-pulse-outline',
+  'eyedropper',
+] as const;
+
+export function symptomIconName(symptomId: string | null, custom: { id: string; icon: string }[]): string | null {
+  if (!symptomId) return null;
+  return BUILTIN_SYMPTOM_ICONS[symptomId] ?? custom.find((item) => item.id === symptomId)?.icon ?? null;
+}

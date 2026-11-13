@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { TemperatureChart } from '../components/charts/TemperatureChart';
-import { ReminderCard } from '../components/ReminderCard';
 import { Banner, Body, Button, Card, ConfirmDialog, DateTimeFields, Muted, Screen, Segmented, TextField } from '../components/ui';
 import { combineBerlin, dateFieldValue, formatDateTime, timeFieldValue } from '../domain/dates';
 import { formatCelsius, parseDecimal } from '../domain/format';
@@ -15,8 +14,7 @@ import { useTheme } from '../theme/ThemeProvider';
 
 export function TemperatureScreen({ now, onEdit, onAdd }: { now: Date; onEdit: (id: string) => void; onAdd: () => void }) {
   const theme = useTheme();
-  const [days, setDays] = useState(5);
-  const [stepHours, setStepHours] = useState(6);
+  const [days, setDays] = useState(2);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const scroller = useRef<{ scrollTo: (options: { y: number; animated?: boolean }) => void } | null>(null);
   const rowY = useRef<Record<string, number>>({});
@@ -29,7 +27,6 @@ export function TemperatureScreen({ now, onEdit, onAdd }: { now: Date; onEdit: (
   if (!data || !activeChild) return <Body>Lege zuerst eine Person an.</Body>;
   const own = forChild(data.temperatures, activeChild.id);
   const listed = [...own].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  const reminder = data.reminders.find((item) => item.childId === activeChild.id && item.kind === 'temperature');
 
   return (
     <View style={{ flex: 1 }}>
@@ -41,13 +38,12 @@ export function TemperatureScreen({ now, onEdit, onAdd }: { now: Date; onEdit: (
             doses={forChild(data.doses, activeChild.id)}
             medications={forChild(data.medications, activeChild.id)}
             symptoms={forChild(data.symptoms, activeChild.id)}
+            customSymptoms={data.customSymptoms ?? []}
             selectedId={selectedId}
             onSelectId={setSelectedId}
             now={now}
             days={days}
-            stepHours={stepHours}
             onDays={setDays}
-            onStep={setStepHours}
           />
         </Card>
       </View>
@@ -58,7 +54,6 @@ export function TemperatureScreen({ now, onEdit, onAdd }: { now: Date; onEdit: (
         contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 28 }}
         keyboardShouldPersistTaps="handled"
       >
-        <ReminderCard childId={activeChild.id} kind="temperature" reminder={reminder} />
         {listed.map((entry) => {
           const selected = entry.id === selectedId;
           return (

@@ -1,25 +1,17 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { BellIcon } from '../components/chrome';
 import { ReminderCard } from '../components/ReminderCard';
 import { Banner, Body, Button, Card, ConfirmDialog, DateTimeFields, Muted, Screen, TextField } from '../components/ui';
-import { combineBerlin, dateFieldValue, formatDateTime, formatTime, sameBerlinDay, timeFieldValue } from '../domain/dates';
+import { combineBerlin, dateFieldValue, formatDateTime, timeFieldValue } from '../domain/dates';
 import { formatHours, formatSince, parseDecimal } from '../domain/format';
 import { createId } from '../domain/ids';
 import { assessDose, type DoseAssessment } from '../domain/medication';
 import { forChild } from '../domain/select';
-import { MEDICAL_DISCLAIMER, type DoseEntry, type Medication } from '../domain/types';
+import type { DoseEntry, Medication } from '../domain/types';
 import { removeDose, removeMedication, saveDose, saveMedication } from '../data/mutations';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
-
-function limitsText(assessment: DoseAssessment, now: Date): string {
-  if (!assessment.lastDoseAt || !assessment.nextEarliest) return 'noch keine Gabe';
-  if (assessment.nextEarliest.getTime() <= now.getTime()) return 'nächste Gabe jetzt möglich';
-  const clock = sameBerlinDay(assessment.nextEarliest, now)
-    ? `um ${formatTime(assessment.nextEarliest)}`
-    : `am ${formatDateTime(assessment.nextEarliest)}`;
-  return `nächste Gabe frühestens ${clock}`;
-}
 
 function warningText(name: string, assessment: DoseAssessment): string | null {
   const parts: string[] = [];
@@ -50,51 +42,91 @@ export function MedicationScreen({
 }) {
   const theme = useTheme();
   const { data, activeChild } = useStore();
+  const [sheetId, setSheetId] = useState<string | null>(null);
   if (!data || !activeChild) return <Body>Lege zuerst eine Person an.</Body>;
   const meds = forChild(data.medications, activeChild.id);
   const doses = forChild(data.doses, activeChild.id);
+  const sheetMed = meds.find((item) => item.id === sheetId) ?? null;
   return (
-    <View style={{ gap: 14 }}>
-      <Button label="Medikament anlegen" onPress={onAdd} />
-      <Muted>{MEDICAL_DISCLAIMER}</Muted>
-      {meds.length === 0 ? <Body>Noch kein Medikament. Trag Name, Dosis, Abstand und Maximum selbst ein.</Body> : null}
-      {meds.map((medication) => {
-        const own = doses.filter((dose) => dose.medicationId === medication.id);
-        const assessment = assessDose({
-          doses: own,
-          minIntervalHours: medication.minIntervalHours,
-          maxPer24h: medication.maxDosesPer24h,
-          at: now,
-        });
-        return (
-          <Card key={medication.id}>
-            <Text style={{ color: theme.text, fontSize: 22, fontWeight: '700' }}>{medication.name}</Text>
-            <Muted>
-              {medication.doseText} · Abstand {formatHours(medication.minIntervalHours)} · höchstens {medication.maxDosesPer24h}{' '}
-              in 24 h
-            </Muted>
-            <Body>
-              {assessment.lastDoseAt
-                ? `letzte Gabe ${formatDateTime(new Date(assessment.lastDoseAt))}${assessment.hoursSince !== null ? ` · ${formatSince(assessment.hoursSince)}` : ''}`
-                : 'letzte Gabe: noch keine'}
-            </Body>
-            <Body>{limitsText(assessment, now)}</Body>
-            <Body>{`Heute: ${assessment.countToday} · letzte 24h: ${assessment.count24h} von ${medication.maxDosesPer24h}`}</Body>
-            {medication.isExample ? <Muted>Abstand und Maximum sind Beispieleinträge, keine Empfehlung.</Muted> : null}
-            {assessment.count24h >= medication.maxDosesPer24h ? <Banner tone="warning">Maximum für 24 Stunden erreicht.</Banner> : null}
+    <View style={{ flex: 1 }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }}>
+        <Button label="Medikament anlegen" onPress={onAdd} />
+      </View>
+      <View style={{ paddingHorizontal: 16, gap: 8, flex: 1 }}>
+        {meds.length === 0 ? <Body>Noch kein Medikament. Name, Dosis, Abstand und Maximum trägst du selbst ein.</Body> : null}
+        {meds.map((medication) => {
+          const own = doses.filter((dose) => dose.medicationId === medication.id);
+          const assessment = assessDose({
+            doses: own,
+            minIntervalHours: medication.minIntervalHours,
+            maxPer24h: medication.maxDosesPer24h,
+            at: now,
+          });
+          const reminder = data.reminders.find((item) => item.medicationId === medication.id && item.enabled);
+          const since = assessment.hoursSince === null ? 'noch keine Gabe' : shortSince(assessment.hoursSince);
+          return (
+            <View
+              key={medication.id}
+              style={{
+                minHeight: 56,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: theme.border,
+                backgroundColor: theme.card,
+                flexDirection: 'row',
+                alignItems: 'center',
+              }}
+            >
+              <Pressable accessibilityRole="button" onPress={() => onEdit(medication.id)} style={{ flex: 1, paddingLeft: 12, paddingVertical: 8, minHeight: 56, justifyContent: 'center' }}>
+                <Text style={{ color: theme.text, fontSize: 16, lineHeight: 20, fontWeight: '700' }} numberOfLines={1}>
+                  {medication.name}
+                </Text>
+                <Text style={{ color: theme.muted, fontSize: 13, lineHeight: 18 }} numberOfLines={1}>
+                  {since} · heute {assessment.countToday}/{medication.maxDosesPer24h}
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={reminder ? 'Erinnerung an' : 'Erinnerung aus'}
+                onPress={() => setSheetId(medication.id)}
+                style={{ width: 44, height: 48, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <BellIcon color={reminder ? theme.accent : theme.muted} filled={Boolean(reminder)} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Gabe eintragen"
+                onPress={() => onDose(medication.id)}
+                style={{ minWidth: 72, height: 40, marginRight: 8, borderRadius: 10, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Text style={{ color: theme.onAccent, fontSize: 14, fontWeight: '800' }}>+ Gabe</Text>
+              </Pressable>
+            </View>
+          );
+        })}
+      </View>
+      {sheetMed ? (
+        <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }]} onPress={() => setSheetId(null)}>
+          <Pressable onPress={() => undefined} style={{ backgroundColor: theme.bg, borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 16, gap: 8, maxHeight: '86%' }}>
+            <Text style={{ color: theme.text, fontSize: 18, lineHeight: 24, fontWeight: '700' }}>Erinnerung · {sheetMed.name}</Text>
             <ReminderCard
               childId={activeChild.id}
               kind="medication"
-              medicationId={medication.id}
-              reminder={data.reminders.find((item) => item.medicationId === medication.id)}
+              medicationId={sheetMed.id}
+              reminder={data.reminders.find((item) => item.medicationId === sheetMed.id)}
             />
-            <Button label="Gabe eintragen" onPress={() => onDose(medication.id)} />
-            <Button label="Medikament ändern" variant="secondary" onPress={() => onEdit(medication.id)} />
-          </Card>
-        );
-      })}
+            <Button label="Schließen" variant="secondary" onPress={() => setSheetId(null)} />
+          </Pressable>
+        </Pressable>
+      ) : null}
     </View>
   );
+}
+
+function shortSince(hours: number): string {
+  if (hours < 1) return formatSince(hours);
+  const rounded = Math.max(1, Math.round(hours));
+  return `vor ${rounded} h`;
 }
 
 export function MedicationForm({

@@ -6,7 +6,8 @@ export type Route =
   | { name: 'voice'; autoStart?: boolean }
   | { name: 'profile'; childId?: string }
   | { name: 'settings' }
-  | { name: 'member'; memberId?: string }
+  | { name: 'family' }
+  | { name: 'export' }
   | { name: CategoryName }
   | { name: 'temp-form'; entryId?: string }
   | { name: 'med-form'; medicationId?: string; prefillName?: string }

@@ -3,8 +3,8 @@ import type { AppData } from '../domain/types';
 import { migrateAppData } from './migrate';
 import type { KindkrankRepository } from './repository';
 
-export const STORAGE_KEY = 'kindkrank.v4';
-const LEGACY_KEYS = ['kindkrank.v3', 'kindkrank.v2'];
+export const STORAGE_KEY = 'kindkrank.v5';
+const LEGACY_KEYS = ['kindkrank.v4', 'kindkrank.v3', 'kindkrank.v2'];
 
 type KeyValueStore = {
   getItem(key: string): Promise<string | null>;

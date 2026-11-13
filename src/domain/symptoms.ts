@@ -8,7 +8,9 @@ export const SYMPTOM_CHIPS = [
   { id: 'hals', label: 'Halsschmerzen' },
   { id: 'appetit', label: 'Appetitlosigkeit' },
   { id: 'trinken', label: 'wenig getrunken' },
-  { id: 'schlapp', label: 'Müdigkeit/schlapp' },
+  { id: 'schlapp', label: 'Müdigkeit' },
+  { id: 'kopf', label: 'Kopfschmerzen' },
+  { id: 'bauch', label: 'Bauchschmerzen' },
   { id: 'atemnot', label: 'Atemnot' },
   { id: 'krampf', label: 'Krampf' },
 ] as const;
@@ -28,6 +30,8 @@ export const SYMPTOM_PATTERNS: { id: SymptomChipId; phrases: string[] }[] = [
   { id: 'trinken', phrases: ['wenig getrunken', 'trinkt wenig', 'trinkt nichts'] },
   { id: 'schlapp', phrases: ['muedigkeit', 'schlapp', 'muede'] },
   { id: 'atemnot', phrases: ['atemnot', 'atmet schwer'] },
+  { id: 'kopf', phrases: ['kopfschmerzen', 'kopfweh'] },
+  { id: 'bauch', phrases: ['bauchschmerzen', 'bauchweh'] },
   { id: 'krampf', phrases: ['krampf', 'krampft', 'krampfanfall'] },
 ];
 

@@ -12,7 +12,7 @@ import { Screen } from './src/components/ui';
 import { GrowthScreen, GrowthForm } from './src/screens/GrowthScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { DoseForm, MedicationForm, MedicationScreen } from './src/screens/MedicationScreen';
-import { InviteAcceptScreen, MemberScreen, ProfileScreen, SettingsScreen } from './src/screens/SettingsScreen';
+import { ExportScreen, FamilyScreen, InviteAcceptScreen, ProfileScreen, SettingsScreen } from './src/screens/SettingsScreen';
 import { SymptomScreen } from './src/screens/SymptomScreen';
 import { TemperatureForm, TemperatureScreen } from './src/screens/TemperatureScreen';
 import { VaccinationForm, VaccinationScreen } from './src/screens/VaccinationScreen';
@@ -80,8 +80,7 @@ function Shell() {
   const [stack, setStack] = useState<Route[]>([]);
   const [drawer, setDrawer] = useState(false);
   const route = stack[stack.length - 1];
-  const self = data?.children.find((person) => person.isSelf);
-  const owner = data?.caregivers.find((person) => person.isOwner);
+  const self = data?.children.find((person) => person.isSelf) ?? data?.children.find((person) => person.isAdmin);
 
   useEffect(() => {
     const open = (url: string | null) => {
@@ -104,10 +103,6 @@ function Shell() {
   function pop() {
     setStack((current) => current.slice(0, -1));
   }
-  function home() {
-    setDrawer(false);
-    setStack([]);
-  }
 
   const ownChrome = Boolean(route && !isCategory(route.name));
   const body = route ? (
@@ -125,7 +120,7 @@ function Shell() {
         });
       }}
       onMenu={() => setDrawer(true)}
-      onProfile={() => push({ name: 'profile', childId: data?.settings.activeChildId ?? undefined })}
+      onFamily={() => push({ name: 'family' })}
       onVoice={() => push({ name: 'voice', autoStart: true })}
       onCategory={(name) => push({ name })}
     />
@@ -138,14 +133,14 @@ function Shell() {
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: theme.bg }]} edges={['top', 'left', 'right', 'bottom']}>
       {route && isCategory(route.name) ? (
-        <View style={styles.categoryHeader}>
+        <View style={[styles.categoryHeader, { backgroundColor: theme.bg }]}>
           <Pressable accessibilityRole="button" accessibilityLabel="Zurück" onPress={pop} style={styles.back}>
-            <Text style={{ color: theme.accent, fontSize: 17, fontWeight: '700' }}>Zurück</Text>
+            <Text style={{ color: theme.accent, fontSize: 16, lineHeight: 22, fontWeight: '700' }}>Zurück</Text>
           </Pressable>
-          <Text style={{ color: theme.text, fontSize: 28, fontWeight: '700' }}>{CATEGORY_TITLE[route.name]}</Text>
+          <Text style={{ color: theme.text, fontSize: 26, lineHeight: 32, fontWeight: '700' }}>{CATEGORY_TITLE[route.name]}</Text>
         </View>
       ) : null}
-      {route && isStickyChart(route.name) ? (
+      {route && isOwnLayout(route.name) ? (
         <View style={styles.fill}>{body}</View>
       ) : route && isCategory(route.name) ? (
         <ScrollView contentContainerStyle={styles.categoryBody} keyboardShouldPersistTaps="handled">
@@ -157,24 +152,21 @@ function Shell() {
       {drawer ? (
         <Pressable style={styles.backdrop} onPress={() => setDrawer(false)}>
           <Pressable style={[styles.drawer, { backgroundColor: theme.card }]} onPress={() => undefined}>
-            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 24 }}>
-              <Avatar name={self?.name ?? owner?.name ?? '?'} color={self?.frameColor ?? theme.accent} size={56} />
+            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 28 }}>
+              <Avatar name={self?.name ?? '?'} color={self?.frameColor ?? theme.accent} size={48} />
               <View>
-                <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>{self?.name ?? owner?.name ?? 'Profil'}</Text>
-                <Text style={{ color: theme.muted }}>{self?.role || (owner ? roleLine(owner.role) : '')}</Text>
+                <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>{self?.name ?? 'Familie'}</Text>
+                <Text style={{ color: theme.muted, fontSize: 14 }}>{self?.isAdmin ? 'Admin' : 'Familien-Gesundheit'}</Text>
               </View>
             </View>
-            <DrawerItem label="Einträge" onPress={home} />
+            <DrawerItem label="Familie" onPress={() => push({ name: 'family' })} />
+            <DrawerItem label="Export" onPress={() => push({ name: 'export' })} />
             <DrawerItem label="Einstellungen" onPress={() => push({ name: 'settings' })} />
           </Pressable>
         </Pressable>
       ) : null}
     </SafeAreaView>
   );
-}
-
-function roleLine(role: string): string {
-  return role;
 }
 
 function DrawerItem({ label, onPress }: { label: string; onPress: () => void }) {
@@ -186,8 +178,8 @@ function DrawerItem({ label, onPress }: { label: string; onPress: () => void }) 
   );
 }
 
-function isStickyChart(name: string): boolean {
-  return name === 'temperature' || name === 'weight' || name === 'height' || name === 'head';
+function isOwnLayout(name: string): boolean {
+  return name === 'temperature' || name === 'medication' || name === 'vaccination' || name === 'symptom' || name === 'weight' || name === 'height' || name === 'head';
 }
 
 function isCategory(name: string): name is CategoryName {
@@ -239,16 +231,24 @@ function RouteScreen({
   if (route.name === 'settings') {
     return (
       <Screen title="Einstellungen" onBack={onDone}>
-        <SettingsScreen
-          onEditChild={(childId) => onPush({ name: 'profile', childId })}
-          onAddChild={() => onPush({ name: 'profile' })}
-          onEditMember={(memberId) => onPush({ name: 'member', memberId })}
-          onAddMember={() => onPush({ name: 'member' })}
-        />
+        <SettingsScreen />
       </Screen>
     );
   }
-  if (route.name === 'member') return <MemberScreen memberId={route.memberId} onDone={onDone} />;
+  if (route.name === 'family') {
+    return (
+      <Screen title="Familie" onBack={onDone}>
+        <FamilyScreen onEdit={(childId) => onPush({ name: 'profile', childId })} onAdd={() => onPush({ name: 'profile' })} />
+      </Screen>
+    );
+  }
+  if (route.name === 'export') {
+    return (
+      <Screen title="Export" onBack={onDone}>
+        <ExportScreen />
+      </Screen>
+    );
+  }
   if (route.name === 'temp-form') return <TemperatureForm entryId={route.entryId} onDone={onDone} />;
   if (route.name === 'med-form') return <MedicationForm medicationId={route.medicationId} prefillName={route.prefillName} onDone={onDone} />;
   if (route.name === 'dose-form') return <DoseForm medicationId={route.medicationId} entryId={route.entryId} onDone={onDone} />;
@@ -261,8 +261,8 @@ function RouteScreen({
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center', padding: 24 },
-  categoryHeader: { paddingHorizontal: 20, paddingTop: 4 },
-  back: { minHeight: 36, justifyContent: 'center' },
+  categoryHeader: { paddingHorizontal: 16, paddingTop: 2, paddingBottom: 8 },
+  back: { minHeight: 40, justifyContent: 'center' },
   categoryBody: { padding: 16, gap: 12, paddingBottom: 32 },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.45)', flexDirection: 'row' },
   drawer: { width: '78%', maxWidth: 340, padding: 22, paddingTop: 28 },

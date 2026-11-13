@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View, type GestureResponderHandlers } from 'react-native';
 import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
 import { line } from 'd3-shape';
+import { SymptomGlyph } from '../SymptomGlyph';
 import { useTheme } from '../../theme/ThemeProvider';
 
 export type ChartPoint = {
@@ -14,6 +15,8 @@ export type ChartPoint = {
   opacity?: number;
   /** False for overlay marks that should not be selected. */
   hit?: boolean;
+  /** MaterialCommunityIcons name drawn instead of a dot, when there is room. */
+  icon?: string;
 };
 
 export type ChartSeries = {
@@ -42,6 +45,7 @@ export function ChartFrame({
   endLabels = [],
   selectedId = null,
   onSelectId,
+  panHandlers,
 }: {
   height?: number;
   xDomain: [number, number];
@@ -57,6 +61,7 @@ export function ChartFrame({
   endLabels?: { y: number; text: string }[];
   selectedId?: string | null;
   onSelectId?: (id: string) => void;
+  panHandlers?: GestureResponderHandlers;
 }) {
   const theme = useTheme();
   const [width, setWidth] = useState(360);
@@ -98,7 +103,7 @@ export function ChartFrame({
   const tipLeft = selected ? Math.min(Math.max(xOf(selected.x) - 78, 8), Math.max(width - 168, 8)) : 0;
 
   return (
-    <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+    <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} {...panHandlers}>
       <Svg width={width} height={height}>
         {verticals.map((item, index) => (
           <Line
@@ -210,7 +215,7 @@ export function ChartFrame({
             {tick.label}
           </SvgText>
         ))}
-        {points.map((point, index) => (
+        {points.map((point, index) => point.icon ? null : (
           <Circle
             key={point.id ?? `p-${index}`}
             cx={xOf(point.x)}
@@ -227,6 +232,17 @@ export function ChartFrame({
             }}
           />
         ))}
+        {points
+          .filter((point) => point.icon)
+          .map((point, index) => (
+            <View
+              key={`icon-${point.id ?? index}`}
+              pointerEvents="none"
+              style={{ position: 'absolute', left: xOf(point.x) - 9, top: yOf(point.y) - 9 }}
+            >
+              <SymptomGlyph name={point.icon as string} color={point.fill ?? theme.text} size={18} />
+            </View>
+          ))}
       </Svg>
       <Pressable
         accessibilityRole="adjustable"

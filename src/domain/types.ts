@@ -8,6 +8,9 @@ export type Sex = 'maedchen' | 'junge';
 
 export type PersonType = 'kind' | 'erwachsen';
 
+/** Who this member is on this phone. Admin installs the app. Others may be invited. */
+export type JoinStatus = 'admin' | 'eingeladen' | 'beigetreten' | 'ohne-app';
+
 export const FRAME_COLORS = ['#3B82F6', '#E85A9B', '#F5A524', '#3DDC97', '#EF4444', '#8B5CF6'] as const;
 
 export const CAREGIVER_ROLES = ['Vater', 'Mutter', 'Oma', 'Opa', 'Andere'] as const;
@@ -19,10 +22,16 @@ export type Person = {
   birthDate: string;
   sex: Sex;
   personType: PersonType;
-  /** Spoken role such as Mutter or Vater. Empty when the person has none. */
+  /**
+   * Kept only so older phrases like „Mama“ still match after migration.
+   * The profile does not ask for a role.
+   */
   role: string;
-  /** The person who uses this phone. Voice phrases like "meine Temperatur" use this. */
+  /** The member using this phone. Voice phrases like "meine Temperatur" use this. */
   isSelf: boolean;
+  /** The person who set up this family. There is one admin. */
+  isAdmin: boolean;
+  joinStatus: JoinStatus;
   defaultMethod: MeasurementMethod;
   frameColor: string;
   isExample: boolean;
@@ -125,6 +134,14 @@ export type VaccinationEntry = {
   isExample: boolean;
 };
 
+/** A symptom the family added. Shared by every person, not tied to one child. */
+export type CustomSymptom = {
+  id: string;
+  name: string;
+  /** MaterialCommunityIcons glyph name. */
+  icon: string;
+};
+
 export type SymptomEntry = {
   id: string;
   childId: string;
@@ -139,7 +156,7 @@ export type SymptomEntry = {
 };
 
 export type AppData = {
-  version: 4;
+  version: 5;
   children: Person[];
   caregivers: Caregiver[];
   temperatures: TemperatureEntry[];
@@ -148,6 +165,7 @@ export type AppData = {
   growth: GrowthEntry[];
   vaccinations: VaccinationEntry[];
   symptoms: SymptomEntry[];
+  customSymptoms: CustomSymptom[];
   reminders: Reminder[];
   settings: Settings;
 };
