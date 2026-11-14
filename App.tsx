@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { PersonFace } from './src/components/PersonFace';
-import { inviteTokenFromUrl, isVoiceLink } from './src/navigation/linking';
+import { inviteTokenFromUrl, isVoiceLink, voicePreviewFromUrl } from './src/navigation/linking';
 import type { CategoryName, Route } from './src/navigation/types';
 import { shiftBerlinDays, sameBerlinDay } from './src/domain/dates';
 import { syncReminders } from './src/notifications/reminders';
@@ -91,7 +91,8 @@ function Shell() {
         setStack([{ name: 'invite', token }]);
         return;
       }
-      if (isVoiceLink(url)) setStack([{ name: 'voice', autoStart: true }]);
+      const preview = voicePreviewFromUrl(url);
+      if (isVoiceLink(url) || preview) setStack([{ name: 'voice', autoStart: preview ? false : true, preview: preview ?? undefined }]);
     };
     void Linking.getInitialURL().then(open);
     const subscription = Linking.addEventListener('url', ({ url }) => open(url));
@@ -230,7 +231,7 @@ function RouteScreen({
     const metric: GrowthMetric = route.name === 'weight' ? 'weight' : route.name === 'height' ? 'height' : 'head';
     return <GrowthScreen metric={metric} onAdd={() => onPush({ name: 'growth-form', metric })} onEdit={(entryId) => onPush({ name: 'growth-form', entryId, metric })} />;
   }
-  if (route.name === 'voice') return <VoiceScreen autoStart={route.autoStart} onDone={onDone} />;
+  if (route.name === 'voice') return <VoiceScreen autoStart={route.autoStart} preview={route.preview} onDone={onDone} />;
   if (route.name === 'profile') return <ProfileScreen childId={route.childId} onDone={onDone} />;
   if (route.name === 'settings') {
     return (

@@ -3,11 +3,13 @@ export type SpeechSupport = 'web' | 'native' | 'none';
 export type SpeechCallbacks = {
   onPartial: (text: string) => void;
   onFinal: (text: string) => void;
-  onError: (message: string) => void;
+  onError: (message: string, code?: string) => void;
   onEnd: () => void;
 };
 
 export type SpeechSession = { stop: () => void };
+
+export type SpeechStartOptions = { hints?: string[] };
 
 type WebResult = { isFinal: boolean; 0?: { transcript?: string } };
 
@@ -18,12 +20,14 @@ type WebRecognition = {
   maxAlternatives: number;
   start: () => void;
   stop: () => void;
+  abort?: () => void;
   onresult: ((event: { resultIndex: number; results: ArrayLike<WebResult> }) => void) | null;
   onerror: ((event: { error?: string }) => void) | null;
   onend: (() => void) | null;
 };
 
-type NativeEvent = { isFinal?: boolean; results?: Array<{ transcript?: string }> };
+type NativeResult = { isFinal?: boolean; results?: Array<{ transcript?: string }> };
+type NativeError = { error?: string; message?: string };
 
 type NativeModule = {
   isRecognitionAvailable?: () => boolean;
@@ -31,7 +35,7 @@ type NativeModule = {
   start: (options: Record<string, unknown>) => void;
   stop: () => void;
   abort?: () => void;
-  addListener?: (event: string, listener: (payload: NativeEvent) => void) => { remove: () => void };
+  addListener?: (event: string, listener: (payload: NativeResult & NativeError) => void) => { remove: () => void };
 };
 
 function webConstructor(): (new () => WebRecognition) | null {
@@ -42,20 +46,26 @@ function webConstructor(): (new () => WebRecognition) | null {
   return host.SpeechRecognition ?? host.webkitSpeechRecognition ?? null;
 }
 
+let nativeModule: NativeModule | null | undefined;
+
 function loadNativeModule(): NativeModule | null {
+  if (nativeModule !== undefined) return nativeModule;
   try {
-    const dynamicRequire = Function(
-      'return typeof require === "function" ? require : null;',
-    )() as ((id: string) => Record<string, unknown>) | null;
-    if (!dynamicRequire) return null;
-    const loaded = dynamicRequire('expo-speech-recognition');
-    const candidate = (loaded.ExpoSpeechRecognitionModule ?? loaded) as NativeModule;
-    if (!candidate || typeof candidate.start !== 'function' || typeof candidate.stop !== 'function') return null;
-    if (candidate.isRecognitionAvailable && !candidate.isRecognitionAvailable()) return null;
-    return candidate;
+    // Static require so the EAS bundle contains the module. Expo Go has no native
+    // part; the package throws while loading and we fall back to typing.
+    const loaded = require('expo-speech-recognition') as { ExpoSpeechRecognitionModule?: NativeModule };
+    const candidate = loaded.ExpoSpeechRecognitionModule ?? null;
+    if (!candidate || typeof candidate.start !== 'function' || typeof candidate.stop !== 'function') {
+      nativeModule = null;
+    } else if (candidate.isRecognitionAvailable && !candidate.isRecognitionAvailable()) {
+      nativeModule = null;
+    } else {
+      nativeModule = candidate;
+    }
   } catch {
-    return null;
+    nativeModule = null;
   }
+  return nativeModule;
 }
 
 export function speechSupport(): SpeechSupport {
@@ -68,9 +78,10 @@ function germanSpeechError(code: string | undefined): string {
   switch (code) {
     case 'not-allowed':
     case 'service-not-allowed':
-      return 'Das Mikrofon ist nicht freigegeben.';
+      return 'Das Mikrofon ist nicht freigegeben. Einmal erlauben, danach geht es ohne Tippen.';
     case 'no-speech':
-      return 'Ich habe nichts gehört. Du kannst den Satz auch eintippen.';
+    case 'speech-timeout':
+      return 'Ich habe nichts gehört.';
     case 'network':
       return 'Die Spracherkennung braucht gerade eine Verbindung. Tippen geht auch ohne.';
     case 'audio-capture':
@@ -80,7 +91,7 @@ function germanSpeechError(code: string | undefined): string {
   }
 }
 
-function startWeb(callbacks: SpeechCallbacks): SpeechSession | null {
+function startWeb(callbacks: SpeechCallbacks, hints: string[]): SpeechSession | null {
   const Ctor = webConstructor();
   if (!Ctor) return null;
   const recognition = new Ctor();
@@ -88,6 +99,8 @@ function startWeb(callbacks: SpeechCallbacks): SpeechSession | null {
   recognition.interimResults = true;
   recognition.continuous = false;
   recognition.maxAlternatives = 1;
+  const withHints = recognition as WebRecognition & { contextualStrings?: string[] };
+  if (hints.length > 0) withHints.contextualStrings = hints;
   recognition.onresult = (event) => {
     let text = '';
     let isFinal = false;
@@ -101,32 +114,53 @@ function startWeb(callbacks: SpeechCallbacks): SpeechSession | null {
     if (isFinal) callbacks.onFinal(spoken);
     else callbacks.onPartial(spoken);
   };
-  recognition.onerror = (event) => callbacks.onError(germanSpeechError(event.error));
+  let failed = false;
+  recognition.onerror = (event) => {
+    failed = true;
+    callbacks.onError(germanSpeechError(event.error), event.error);
+  };
   recognition.onend = () => callbacks.onEnd();
-  recognition.start();
-  return { stop: () => recognition.stop() };
+  try {
+    recognition.start();
+  } catch {
+    callbacks.onError(germanSpeechError(undefined));
+    callbacks.onEnd();
+    return null;
+  }
+  if (failed) return null;
+  return {
+    stop: () => {
+      try {
+        recognition.abort?.();
+        recognition.stop();
+      } catch {
+        // The recognizer may already be stopped.
+      }
+    },
+  };
 }
 
-async function startNative(callbacks: SpeechCallbacks): Promise<SpeechSession | null> {
+async function startNative(callbacks: SpeechCallbacks, hints: string[]): Promise<SpeechSession | null> {
   const native = loadNativeModule();
   if (!native) return null;
   try {
     if (native.requestPermissionsAsync) {
       const permission = await native.requestPermissionsAsync();
       if (permission.granted === false) {
-        callbacks.onError('Das Mikrofon ist nicht freigegeben.');
+        callbacks.onError(germanSpeechError('not-allowed'), 'not-allowed');
         callbacks.onEnd();
         return null;
       }
     }
-    const subscriptions = ['result', 'error', 'end', 'speechend'].map((eventName) => {
+    const subscriptions = ['result', 'error', 'end'].map((eventName) => {
       if (!native.addListener) return null;
       return native.addListener(eventName, (payload) => {
         if (eventName === 'error') {
-          callbacks.onError(germanSpeechError(undefined));
+          const code = payload.error;
+          callbacks.onError(germanSpeechError(code), code);
           return;
         }
-        if (eventName === 'end' || eventName === 'speechend') {
+        if (eventName === 'end') {
           callbacks.onEnd();
           return;
         }
@@ -136,10 +170,28 @@ async function startNative(callbacks: SpeechCallbacks): Promise<SpeechSession | 
         else callbacks.onPartial(transcript);
       });
     });
-    native.start({ lang: 'de-DE', interimResults: true, continuous: false });
+    native.start({
+      lang: 'de-DE',
+      interimResults: true,
+      continuous: false,
+      maxAlternatives: 1,
+      addsPunctuation: false,
+      contextualStrings: hints,
+      androidIntent: 'android.speech.action.RECOGNIZE_SPEECH',
+      androidIntentOptions: {
+        EXTRA_LANGUAGE_MODEL: 'free_form',
+        EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 1400,
+        EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 400,
+      },
+    });
     return {
       stop: () => {
-        native.stop();
+        try {
+          native.abort?.();
+          native.stop();
+        } catch {
+          // Already stopped.
+        }
         for (const subscription of subscriptions) subscription?.remove();
       },
     };
@@ -150,8 +202,9 @@ async function startNative(callbacks: SpeechCallbacks): Promise<SpeechSession | 
   }
 }
 
-export async function startSpeech(callbacks: SpeechCallbacks): Promise<SpeechSession | null> {
-  const web = startWeb(callbacks);
+export async function startSpeech(callbacks: SpeechCallbacks, options: SpeechStartOptions = {}): Promise<SpeechSession | null> {
+  const hints = options.hints ?? [];
+  const web = startWeb(callbacks, hints);
   if (web) return web;
-  return startNative(callbacks);
+  return startNative(callbacks, hints);
 }

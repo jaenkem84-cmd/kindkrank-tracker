@@ -16,8 +16,8 @@ Technisch: Expo SDK 58, React Native, TypeScript. Der erste Start legt Beispield
 4. Impfung: Handelsname aus einer kurzen Liste gängiger Präparate (Zusammensetzung laut Fachinformation, vom Paul-Ehrlich-Institut zu prüfen), Charge, Arzt, Notiz. Der Impfstatus orientiert sich am STIKO-Kalender im Epidemiologischen Bulletin 4/2026 und muss mit dem Bulletin des laufenden Jahres abgeglichen werden. Die Übersicht sagt erledigt, fällig, überfällig oder später und ist keine ärztliche Auskunft. „Für den Arzt“ lässt sich teilen. „Impfpass fotografieren“ nimmt ein Foto; Texterkennung auf dem Gerät gibt es erst in einem Entwicklungs-Build mit `@react-native-ml-kit/text-recognition`. Bis dahin tippst du den Text vom Etikett, derselbe Abgleich schlägt den Handelsnamen vor.
 5. Symptome mit Uhrzeit, optional leicht/mittel/stark und Notiz. Die Chips sind Husten, Schnupfen, Erbrechen, Durchfall, Ausschlag, Ohrenschmerzen, Halsschmerzen, Appetitlosigkeit, wenig getrunken, Müdigkeit/schlapp, Atemnot, Krampf, plus Freitext. Auf dem Temperaturdiagramm liegen sie als Punkte, abschaltbar. „Husten“ und „hat erbrochen“ versteht die Spracheingabe.
 6. Gewicht (kg), Größe (cm) und Kopfumfang (cm), jeweils mit Diagramm über das Alter. Jahre kräftig, Monate hell, Beschriftung standardmäßig alle 4 Monate. Darüber die WHO-Perzentile P3, P15, P50, P85 und P97, am rechten Rand beschriftet. Ein Tipp auf einen Messpunkt nennt den nahen Perzentilwert. Zeitraum 1 Jahr, 2 Jahre oder 5 Jahre direkt am Diagramm.
-7. Große Spracheingabe auf dem Startbildschirm. Der Parser versteht zum Beispiel „Temperatur jetzt 38,2“, „38.2 Grad“, „vor 15 Minuten 37,3 Grad“, „Ibuprofen gegeben“, „Paracetamol-Zäpfchen gegeben“, „Gewicht 9,6 Kilo“. Vor dem Speichern kannst du alles noch ändern. Ein späteres Sprachmodell (zum Beispiel Gemini) kann vor den Regeln eingehängt werden, siehe unten. In Snack und Expo Go tippst du den Satz; das Mikrofon läuft dort meist nicht.
-8. Deep Link `kindkrank://voice` öffnet direkt die Spracheingabe. Im APK gibt es dazu eine Android-App-Verknüpfung.
+7. Große Spracheingabe auf dem Startbildschirm. Der Parser versteht zum Beispiel „Anna 38,5“, „Temperatur jetzt 38,2“, „vor 15 Minuten 37,3 Grad“, „Ibuprofen gegeben“, „Gewicht 9,6 Kilo“. In der APK liest die App den Eintrag vor und speichert nach etwa drei Sekunden oder auf „ja“. In Snack und Expo Go tippst du den Satz; das Mikrofon läuft dort nicht.
+8. Deep Link `kindkrank://voice` öffnet direkt die Spracheingabe und hört in der APK sofort zu. Icon lang drücken: Verknüpfung **Spracheingabe**. „Hey Google“ ist auf Deutsch 2026 nicht zuverlässig, siehe unten.
 9. Speicher hinter einer Repository-Schnittstelle. Dieser Prototyp speichert lokal (AsyncStorage). Kein Konto, kein API-Schlüssel. Der Plan für einen Familien-Einladungslink steht weiter unten.
 10. In den Einstellungen exportierst du **alle** Daten als ZIP mit einer CSV pro Tabelle, einschließlich Impfungen und Symptome (Semikolon, UTF-8 mit BOM). Ohne Wochenfilter.
 11. Startseite wie ein Tagesbuch: Name und Alter in Wochen und Tagen, Profilbild mit Rahmenfarbe, Tag vor und zurück, Zähler für den Tag, unten die Leiste Temperatur, Medikation, Impfung, Symptome, Gewicht, Größe, Kopfumfang. Hamburger-Menü: Alarme, Familie, Export und Einstellungen. Kein eigener Punkt Analyse und keine zentrale Erinnerungsliste. Erinnerungen sitzen bei Temperatur und bei jedem Medikament. Auf dem Handy sind das lokale Mitteilungen. Im Browser werden sie nur gespeichert.
@@ -74,51 +74,76 @@ Expo öffnet Chrome mit derselben Oberfläche. Für eine handyähnliche Breite: 
 
 Wenn das Handy den Rechner nicht erreicht: `npx expo start --tunnel`.
 
-## Installierbare APK (EAS)
+## Installierbare APK (Windows)
 
 Die Expo-Projekt-ID steht schon in `app.json`:
 
 `expo.extra.eas.projectId` = `a0440d97-fdfd-493d-908e-790b802845d9`
 
-In diesem Checkout wurde `eas init` nicht ausgeführt, und es gibt hier kein Expo-Login. Das machst du auf deinem Rechner, im Projektordner:
+`eas.json` hat das Profil `preview`: interne Verteilung, Android-APK. Kein Play-Store-Bundle. Expo Go bleibt für alles andere nutzbar. Mikrofon, Vorlesen ohne Unterbrechung und der Assistenten-Link brauchen diese APK.
 
-```bash
+Im Projektordner, in PowerShell oder Eingabeaufforderung:
+
+```bat
+git pull
+npm install
 npx eas-cli@latest login
-npx eas-cli@latest init --id a0440d97-fdfd-493d-908e-790b802845d9
 npx eas-cli@latest build -p android --profile preview
 ```
 
-`eas.json` enthält das Profil `preview` mit `distribution: internal` und `android.buildType: apk`. Das Ergebnis ist eine installierbare APK, kein Play-Store-Bundle. Wenn `eas init` meldet, dass die Projekt-ID bereits gesetzt ist, den Befehl überspringen und nur `build` ausführen.
+`eas init` ist nicht nötig, solange die Projekt-ID in `app.json` steht. Wenn Expo nach dem Slug fragt: `kindkrank-tracker`. Android-Paket: `de.kindkrank.tracker`.
 
-Der Slug in `app.json` ist `kindkrank-tracker`, das Android-Paket `de.kindkrank.tracker`. Wenn das bestehende Projekt auf expo.dev einen anderen Slug hat, `expo.slug` an den Slug dort anpassen. Die Projekt-ID ist die Verbindung.
+Der Build läuft auf den Servern von Expo. Am Ende erscheint ein Link und ein QR-Code.
 
-Nach dem Build zeigt Expo einen Link. Die APK auf dem Handy laden und installieren.
+1. Den Link auf dem Android-Handy öffnen und die APK laden.
+2. Installation aus dieser Quelle erlauben, falls Android fragt.
+3. Die App heißt **Familien-Gesundheit** und liegt neben Expo Go. Expo Go nicht deinstallieren.
+4. Beim ersten Spracheingabe-Start einmal **Mikrofon erlauben**. Diese eine Rückfrage lässt sich nicht überspringen. Danach nicht mehr.
 
-## Spracheingabe
+Prüfen, dass der Deep Link die Spracheingabe öffnet (Handy per USB, USB-Debugging an):
 
-Der Parser ist absichtlich austauschbar.
-
-- `src/domain/voice/parser.ts` ist der regelbasierte Parser für Deutsch.
-- `interpretUtterance(text, kontext, parserListe)` geht die Liste der Reihe nach durch. Ein Parser, der `null` oder `unknown` liefert, gibt an den nächsten ab.
-- `createLlmParser` in `src/domain/voice/llmParser.ts` ist die Stelle für ein späteres Modell. Kein Netzwerk, kein API-Schlüssel in diesem Prototyp. Ein Gemini-Adapter käme als erster Eintrag in die Liste und würde bei Unsicherheit `null` zurückgeben.
-
-Im Browser (Chrome, `localhost` oder HTTPS) versucht die App die Web Speech API mit `de-DE`. Klappt das, erscheint das Mikrofon. In Snack, im Android-Emulator und in Expo Go ist diese API meist nicht da. Dann bleibt das Textfeld, und **Auswerten** nutzt denselben Parser. Nichts wird gespeichert, bevor die Zusammenfassung bestätigt ist.
-
-Echtes Mikrofon auf dem Handy braucht ein natives Modul, das nicht in Expo Go liegt:
-
-```bash
-npx expo install expo-speech-recognition
+```bat
+adb shell am start -a android.intent.action.VIEW -d "kindkrank://voice" de.kindkrank.tracker
 ```
 
-Danach die Anleitung des Pakets für das Config-Plugin und die Mikrofon-Berechtigung übernehmen und einen Development- oder Preview-Build bauen (`eas build`, nicht Expo Go). Der Codepfad dafür liegt in `src/speech/recognition.ts`: er lädt `expo-speech-recognition` nur, wenn das Paket im Build vorhanden ist, und fällt sonst auf Tippen zurück. Solange das Paket nicht installiert ist, bleibt der Start in Expo Go und im Browser unberührt.
+Die App muss direkt „Ich höre zu“ zeigen.
 
-## Homescreen-Verknüpfung
+## Freihändige Spracheingabe
 
-Der Link lautet `kindkrank://voice` und öffnet die Spracheingabe.
+Beispiel, beide Hände am Thermometer: „Anna 38,5“. Die App liest vor: „Anna, 38,5 Grad rektal, 1:52 Uhr. Speichern?“ Nach etwa drei Sekunden Stille speichert sie. Vorher „ja“ oder „speichern“ speichert sofort, „nein“ oder „abbrechen“ verwirft, „rückgängig“ nimmt den letzten Eintrag dieser Sitzung zurück, „beenden“ schließt die Spracheingabe. Der Bildschirm bleibt an. Ein kurzer Ton und eine Vibration markieren Zuhören, Speichern und Abbruch.
 
-- **Installierte APK:** App-Icon lang drücken. Dort liegt die Verknüpfung **Spracheingabe** (kurz: Sprache). Sie wird beim nächsten Prebuild aus `plugins/withVoiceShortcut.js` in die Android-Shortcuts geschrieben. Dieselbe Kachel lässt sich auf den Homescreen ziehen. Ein eigener Android-Widget (App-Widget mit eigener Fläche) ist in Expo Go nicht möglich und in diesem Prototyp nicht als Widget gebaut; die App-Verknüpfung ist der vorbereitete Weg.
-- **Expo Go:** Der eigene Scheme `kindkrank://` öffnet Expo Go nicht. Dort die große Taste **Spracheingabe** auf dem Startbildschirm nutzen. Ein Shortcut auf `exp://…/--/voice` gilt nur, solange der Dev-Server läuft, und ist als Homescreen-Icon unpraktisch.
-- Zum Prüfen einer installierten App: `npx uri-scheme open kindkrank://voice --android`.
+Eine Grenze bei einem Medikament wird nicht automatisch gespeichert. Dann sagt die App den Grund, und „trotzdem“ speichert bewusst darüber hinweg.
+
+In Expo Go und ohne Mikrofon bleibt das Textfeld. **Auswerten** nutzt denselben Parser und dieselbe Ansage. Dort tippt man Speichern oder Abbrechen.
+
+Der Parser ist austauschbar.
+
+- `src/domain/voice/parser.ts` ist der regelbasierte Parser für Deutsch.
+- `interpretUtterance(text, kontext, parserListe)` geht die Liste der Reihe nach durch.
+- `createLlmParser` in `src/domain/voice/llmParser.ts` ist die Stelle für ein späteres Modell. Kein Netzwerk und kein API-Schlüssel in diesem Prototyp.
+
+Die gesprochene Zeile geht an die Spracherkennung des Geräts (auf vielen Android-Handys der Dienst von Google). Die App schickt den fertigen Eintrag nicht an einen Assistenten.
+
+## Hey Google, Gemini und Siri
+
+Stand November 2026, nach der Dokumentation von Android App Actions und den öffentlichen Hinweisen zu Gemini:
+
+- `actions.intent.OPEN_APP_FEATURE` ist die eingebaute App-Action, um eine Funktion zu öffnen. Die dokumentierten Sprachen dafür sind Englisch (mehrere Regionen), Spanisch (Spanien) und Portugiesisch (Brasilien). **Deutsch ist nicht dabei.** Custom Intents sind nur `en-US`.
+- Die APK enthält die Capability trotzdem, mit den Funktionsnamen Spracheingabe, Sprache, voice input, voice und speech input, erfüllt über `kindkrank://voice`. Das schreibt `plugins/withVoiceShortcut.js`.
+- Gemini als Standard-Assistent öffnet auf „Hey Google, öffne Familien-Gesundheit“ die App, übergibt die Funktion aber oft nicht. Die Spracheingabe startet dann nicht. Zurückschalten auf den klassischen Assistant stellt das nach Berichten aus 2025 nicht zuverlässig wieder her.
+- Eine statische App-Verknüpfung **öffnet der Assistent nicht verlässlich nur wegen ihres Namens.** Lang drücken auf das Icon ist zuverlässig.
+
+Was auf dem Handy verlässlich ist:
+
+1. App-Icon lang drücken → **Spracheingabe**. Danach kein Tippen mehr. Die Kachel kann auf den Startbildschirm gezogen werden.
+2. Diese Sätze nach der Installation ausprobieren. Es kann ein paar Stunden dauern, bis Google die Verknüpfung indexiert, und ein Neustart hilft manchmal:
+   - „Hey Google, öffne Familien-Gesundheit Spracheingabe“
+   - „Hey Google, Spracheingabe in Familien-Gesundheit“
+   - „Hey Google, öffne Spracheingabe“
+3. Nur wenn die Assistant-Sprache Englisch ist, zusätzlich: „Hey Google, open voice input on Familien-Gesundheit“ und „Hey Google, open Familien-Gesundheit voice input“.
+4. Routine, wenn der Aktionspicker eine Verknüpfung anbietet: Google-App oder Gemini → Einstellungen → Routinen. Auslöser genau „Spracheingabe für Familien-Gesundheit“. Aktion: die Verknüpfung **Spracheingabe** von Familien-Gesundheit, nicht nur „App öffnen“. „App öffnen“ landet auf dem Startbildschirm. Danach: „Hey Google, starte Spracheingabe für Familien-Gesundheit“. Gemini führt nicht jede Routinen-Aktion aus und sagt das dann.
+
+iOS, nachrangig: `plugins/withVoiceIntent.js` legt beim iOS-Build einen App Intent und einen Siri-Kurzbefehl „Spracheingabe“ an. Siri-Sätze müssen den App-Namen enthalten, also „Spracheingabe in Familien-Gesundheit“. Zuverlässiger auf dem iPhone ist ein eigener Kurzbefehl: Aktion „URL öffnen“ mit `kindkrank://voice`, zu Siri hinzufügen. Der Android-Build hängt nicht an dieser Datei.
 
 ## Supabase für die Familie
 

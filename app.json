@@ -32,7 +32,17 @@
     "plugins": [
       "expo-sharing",
       "expo-notifications",
-      "./plugins/withVoiceShortcut"
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Familien-Gesundheit nutzt das Mikrofon nur, während du einen Eintrag sprichst.",
+          "speechRecognitionPermission": "Die Spracherkennung wandelt den gesprochenen Eintrag in Text um. Der Text bleibt in der App.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
+      ],
+      "expo-audio",
+      "./plugins/withVoiceShortcut",
+      "./plugins/withVoiceIntent"
     ]
   }
 }

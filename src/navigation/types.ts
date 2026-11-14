@@ -3,7 +3,7 @@ import type { GrowthMetric } from '../domain/who/who';
 export type CategoryName = 'temperature' | 'medication' | 'vaccination' | 'symptom' | 'weight' | 'height' | 'head';
 
 export type Route =
-  | { name: 'voice'; autoStart?: boolean }
+  | { name: 'voice'; autoStart?: boolean; preview?: 'listening' | 'confirm' }
   | { name: 'profile'; childId?: string }
   | { name: 'settings' }
   | { name: 'family' }
