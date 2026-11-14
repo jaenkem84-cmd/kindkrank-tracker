@@ -27,7 +27,7 @@ export type ChartSeries = {
 };
 
 type Tick = { x: number; label: string };
-type VLine = { x: number; strong: boolean; label?: string };
+type VLine = { x: number; strong: boolean; label?: string; labelAxis?: 'horizontal' | 'vertical' };
 type HLine = { y: number; color: string; dashed?: boolean; label?: string };
 
 export function ChartFrame({
@@ -118,21 +118,31 @@ export function ChartFrame({
             strokeWidth={item.strong ? 1.15 : 0.6}
           />
         ))}
-        {verticals.map((item, index) =>
-          item.label ? (
-            <SvgText
-              key={`vh-${index}`}
-              x={xOf(item.x)}
-              y={pad.top + innerH - 2}
-              fill={theme.muted}
-              fontSize={8}
-              textAnchor="middle"
-              opacity={0.8}
-            >
+        {verticals.map((item, index) => {
+          if (!item.label) return null;
+          const x = xOf(item.x);
+          const y = pad.top + innerH - 3;
+          if (item.labelAxis === 'vertical') {
+            return (
+              <SvgText
+                key={`vh-${index}`}
+                x={0}
+                y={0}
+                fill={theme.muted}
+                fontSize={8}
+                textAnchor="end"
+                transform={`translate(${x}, ${y}) rotate(-90)`}
+              >
+                {item.label}
+              </SvgText>
+            );
+          }
+          return (
+            <SvgText key={`vh-${index}`} x={x} y={y} fill={theme.muted} fontSize={8} textAnchor="middle" opacity={0.8}>
               {item.label}
             </SvgText>
-          ) : null,
-        )}
+          );
+        })}
         {selected ? (
           <Line
             x1={xOf(selected.x)}

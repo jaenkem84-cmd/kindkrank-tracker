@@ -265,16 +265,11 @@ export function VoiceScreen({ autoStart = false, onDone }: { autoStart?: boolean
         setError('Es fehlt ein Messwert.');
         return;
       }
-      const entry: GrowthEntry = {
-        id: createId('wuchs'),
-        childId: draft.childId,
-        timestamp: when.toISOString(),
-        isExample: false,
-      };
-      if (weight !== undefined) entry.weightKg = weight;
-      if (height !== undefined) entry.heightCm = height;
-      if (head !== undefined) entry.headCm = head;
-      update((current) => saveGrowth(current, entry));
+      const pieces: GrowthEntry[] = [];
+      if (weight !== undefined) pieces.push({ id: createId('wuchs'), childId: draft.childId, timestamp: when.toISOString(), weightKg: weight, isExample: false });
+      if (height !== undefined) pieces.push({ id: createId('wuchs'), childId: draft.childId, timestamp: when.toISOString(), heightCm: height, isExample: false });
+      if (head !== undefined) pieces.push({ id: createId('wuchs'), childId: draft.childId, timestamp: when.toISOString(), headCm: head, isExample: false });
+      update((current) => pieces.reduce((next, entry) => saveGrowth(next, entry), current));
       onDone();
       return;
     }

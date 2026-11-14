@@ -267,7 +267,7 @@ function RouteScreen({
   if (route.name === 'temp-form') return <TemperatureForm entryId={route.entryId} onDone={onDone} />;
   if (route.name === 'med-form') return <MedicationForm medicationId={route.medicationId} prefillName={route.prefillName} onDone={onDone} />;
   if (route.name === 'dose-form') return <DoseForm medicationId={route.medicationId} entryId={route.entryId} onDone={onDone} />;
-  if (route.name === 'growth-form') return <GrowthForm entryId={route.entryId} onDone={onDone} />;
+  if (route.name === 'growth-form') return <GrowthForm entryId={route.entryId} metric={route.metric ?? 'weight'} onDone={onDone} />;
   if (route.name === 'vaccination-form') return <VaccinationForm productId={route.productId} onDone={onDone} />;
   if (route.name === 'invite-compose') {
     return (

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { GrowthChart } from '../components/charts/GrowthChart';
-import { Banner, Body, Button, Card, ConfirmDialog, DateTimeFields, Muted, Screen, TextField } from '../components/ui';
+import { Banner, Body, Button, Card, ConfirmDialog, DateTimeFields, Screen, TextField } from '../components/ui';
 import { combineBerlin, dateFieldValue, formatDateTime, timeFieldValue } from '../domain/dates';
 import { formatDecimal, parseDecimal } from '../domain/format';
 import { createId } from '../domain/ids';
@@ -67,13 +67,11 @@ export function GrowthScreen({
       >
       {listed.map((entry) => {
         const selected = entry.id === selectedId;
-        const value = [
-          entry.weightKg !== undefined ? `${formatDecimal(entry.weightKg, 2)} kg` : null,
-          entry.heightCm !== undefined ? `${formatDecimal(entry.heightCm, 1)} cm` : null,
-          entry.headCm !== undefined ? `${formatDecimal(entry.headCm, 1)} cm Kopf` : null,
-        ]
-          .filter(Boolean)
-          .join(' · ');
+        const value = metric === 'weight'
+          ? `${formatDecimal(entry.weightKg ?? 0, 2)} kg`
+          : metric === 'height'
+            ? `${formatDecimal(entry.heightCm ?? 0, 1)} cm`
+            : `${formatDecimal(entry.headCm ?? 0, 1)} cm`;
         return (
           <View
             key={entry.id}
@@ -109,7 +107,7 @@ export function GrowthScreen({
   );
 }
 
-export function GrowthForm({ entryId, onDone }: { entryId?: string; onDone: () => void }) {
+export function GrowthForm({ entryId, metric = 'weight', onDone }: { entryId?: string; metric?: GrowthMetric; onDone: () => void }) {
   const { data, activeChild, update } = useStore();
   const existing = data?.growth.find((entry) => entry.id === entryId);
   const initial = existing ? new Date(existing.timestamp) : new Date();
@@ -134,19 +132,9 @@ export function GrowthForm({ entryId, onDone }: { entryId?: string; onDone: () =
   function save() {
     if (!data || !activeChild) return;
     const adult = activeChild.personType === 'erwachsen';
-    const weightKg = optional(weight, adult ? 20 : 0.5, adult ? 250 : 80, 'Gewicht in kg');
-    if (weightKg === 'invalid') return;
-    const heightCm = optional(height, 30, 220, 'Größe in cm');
-    if (heightCm === 'invalid') return;
-    const headCm = optional(head, 20, 70, 'Kopfumfang in cm');
-    if (headCm === 'invalid') return;
     const when = combineBerlin(date, time);
     if (!when) {
       setError('Datum als TT.MM.JJJJ und Uhrzeit als HH:MM.');
-      return;
-    }
-    if (weightKg === undefined && heightCm === undefined && headCm === undefined) {
-      setError('Trag mindestens Gewicht, Größe oder Kopfumfang ein.');
       return;
     }
     const entry: GrowthEntry = {
@@ -155,16 +143,35 @@ export function GrowthForm({ entryId, onDone }: { entryId?: string; onDone: () =
       timestamp: when.toISOString(),
       isExample: existing?.isExample ?? false,
     };
-    if (weightKg !== undefined) entry.weightKg = weightKg;
-    if (heightCm !== undefined) entry.heightCm = heightCm;
-    if (headCm !== undefined) entry.headCm = headCm;
+    if (metric === 'weight') {
+      const weightKg = optional(weight, adult ? 20 : 0.5, adult ? 250 : 80, 'Gewicht in kg');
+      if (weightKg === 'invalid' || weightKg === undefined) {
+        if (weightKg !== 'invalid') setError('Trag das Gewicht ein.');
+        return;
+      }
+      entry.weightKg = weightKg;
+    } else if (metric === 'height') {
+      const heightCm = optional(height, 30, 230, 'Größe in cm');
+      if (heightCm === 'invalid' || heightCm === undefined) {
+        if (heightCm !== 'invalid') setError('Trag die Größe ein.');
+        return;
+      }
+      entry.heightCm = heightCm;
+    } else {
+      const headCm = optional(head, 20, 70, 'Kopfumfang in cm');
+      if (headCm === 'invalid' || headCm === undefined) {
+        if (headCm !== 'invalid') setError('Trag den Kopfumfang ein.');
+        return;
+      }
+      entry.headCm = headCm;
+    }
     update((current) => saveGrowth(current, entry));
     onDone();
   }
 
   return (
     <Screen
-      title={existing ? 'Messung ändern' : 'Gewicht und Wachstum'}
+      title={existing ? `${TITLES[metric]} ändern` : TITLES[metric]}
       onBack={onDone}
       footer={
         <>
@@ -188,12 +195,9 @@ export function GrowthForm({ entryId, onDone }: { entryId?: string; onDone: () =
         />
       }
     >
-      <Muted>Gewicht ist während einer Krankheit oft das Wichtigste, zum Beispiel bei starkem Gewichtsverlust.</Muted>
-      <TextField label="Gewicht in kg" value={weight} onChangeText={setWeight} placeholder={activeChild?.personType === 'erwachsen' ? '82,4' : '9,6'} keyboard="decimal-pad" />
-      <TextField label="Größe in cm" value={height} onChangeText={setHeight} placeholder="optional" keyboard="decimal-pad" />
-      {activeChild?.personType === 'kind' ? (
-        <TextField label="Kopfumfang in cm" value={head} onChangeText={setHead} placeholder="optional" keyboard="decimal-pad" />
-      ) : null}
+      {metric === 'weight' ? <TextField label="Gewicht in kg" value={weight} onChangeText={setWeight} placeholder={activeChild?.personType === 'erwachsen' ? '82,4' : '9,6'} keyboard="decimal-pad" /> : null}
+      {metric === 'height' ? <TextField label="Größe in cm" value={height} onChangeText={setHeight} placeholder="72" keyboard="decimal-pad" /> : null}
+      {metric === 'head' ? <TextField label="Kopfumfang in cm" value={head} onChangeText={setHead} placeholder="45" keyboard="decimal-pad" /> : null}
       <DateTimeFields date={date} time={time} onChange={(nextDate, nextTime) => { setDate(nextDate); setTime(nextTime); }} />
     </Screen>
   );

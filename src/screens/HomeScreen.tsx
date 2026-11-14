@@ -1,16 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { useEffect, useRef } from 'react';
+import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { IconButton, MenuIcon } from '../components/chrome';
 import { PersonFace } from '../components/PersonFace';
-import { Button, MicIcon } from '../components/ui';
-import { ageMonths, formatAgeWeeks, formatDayHeading, formatTime, sameBerlinDay } from '../domain/dates';
+import { MicIcon } from '../components/ui';
+import { formatDayHeading, formatDisplayAge, formatTime, sameBerlinDay } from '../domain/dates';
 import { formatDecimal } from '../domain/format';
 import { forChild } from '../domain/select';
-import { FRAME_COLORS, type Person } from '../domain/types';
+import type { Person } from '../domain/types';
 import type { CategoryName } from '../navigation/types';
-import { saveChild, setActivePerson } from '../data/mutations';
+import { setActivePerson } from '../data/mutations';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
 
@@ -23,21 +22,6 @@ const CATEGORIES: { id: CategoryName; label: string; icon: 'thermometer' }[] = [
   { id: 'height', label: 'Größe', icon: 'ruler' as 'thermometer' },
   { id: 'head', label: 'Kopfumfang', icon: 'head-outline' as 'thermometer' },
 ];
-
-const AVATARS = [
-  'face-man',
-  'face-woman',
-  'account-child',
-  'baby-face-outline',
-  'human-male',
-  'human-female',
-  'human-child',
-  'account',
-  'account-heart',
-  'emoticon-happy-outline',
-  'flower-outline',
-  'paw',
-] as const;
 
 const TILE = 148;
 
@@ -64,8 +48,6 @@ export function HomeScreen({
   const { width } = useWindowDimensions();
   const { data, activeChild, update } = useStore();
   const scroller = useRef<{ scrollTo: (options: { x: number; animated?: boolean }) => void } | null>(null);
-  const [pickerFor, setPickerFor] = useState<string | null>(null);
-  const [photoNote, setPhotoNote] = useState<string | null>(null);
   const people = data?.children ?? [];
   const activeIndex = Math.max(0, people.findIndex((person) => person.id === activeChild?.id));
   useEffect(() => {
@@ -89,7 +71,6 @@ export function HomeScreen({
   const categories = CATEGORIES.filter((category) => activeChild.personType === 'kind' || category.id !== 'head');
   const perRow = Math.ceil(categories.length / 2);
   const rows = [categories.slice(0, perRow), categories.slice(perRow)];
-  const editing = people.find((person) => person.id === pickerFor) ?? null;
 
   function selectIndex(index: number) {
     const person = people[Math.max(0, Math.min(people.length - 1, index))];
@@ -100,31 +81,6 @@ export function HomeScreen({
 
   function settle(offsetX: number) {
     selectIndex(Math.round(offsetX / TILE));
-  }
-
-  async function takePhoto(source: 'camera' | 'library') {
-    if (!editing) return;
-    try {
-      if (source === 'camera') {
-        const permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permission.granted) {
-          setPhotoNote('Die Kamera ist nicht freigegeben.');
-          return;
-        }
-      }
-      const result = source === 'camera'
-        ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.4 })
-        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.4 });
-      if (result.canceled || !result.assets[0]) return;
-      update((current) => {
-        const person = current.children.find((item) => item.id === editing.id);
-        if (!person) return current;
-        return saveChild(current, { ...person, photoUri: result.assets[0].uri, avatarIcon: null });
-      });
-      setPickerFor(null);
-    } catch {
-      setPhotoNote('Foto konnte hier nicht gewählt werden.');
-    }
   }
 
   return (
@@ -164,9 +120,6 @@ export function HomeScreen({
           );
         })}
       </ScrollView>
-      <Pressable accessibilityRole="button" accessibilityLabel="Foto oder Avatar" onPress={() => setPickerFor(activeChild.id)} style={{ alignSelf: 'center', minHeight: 32, justifyContent: 'center' }}>
-        <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '700' }}>Foto oder Avatar</Text>
-      </Pressable>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 }}>
         <IconButton label="Menü" onPress={onMenu}>
           <MenuIcon color={theme.text} />
@@ -240,70 +193,12 @@ export function HomeScreen({
           </View>
         ))}
       </View>
-      {editing ? (
-        <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }]} onPress={() => setPickerFor(null)}>
-          <Pressable onPress={() => undefined} style={{ backgroundColor: theme.bg, borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 16, gap: 10, maxHeight: '80%' }}>
-            <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>Aussehen · {editing.name}</Text>
-            {photoNote ? <Text style={{ color: theme.muted }}>{photoNote}</Text> : null}
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <View style={{ flex: 1 }}><Button label="Kamera" variant="secondary" onPress={() => void takePhoto('camera')} /></View>
-              <View style={{ flex: 1 }}><Button label="Galerie" variant="secondary" onPress={() => void takePhoto('library')} /></View>
-            </View>
-            <Text style={{ color: theme.muted, fontSize: 13 }}>Avatar</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Initialen"
-                onPress={() => update((current) => {
-                  const person = current.children.find((item) => item.id === editing.id);
-                  if (!person) return current;
-                  return saveChild(current, { ...person, avatarIcon: null, photoUri: null });
-                })}
-                style={{ width: 48, height: 48, borderRadius: 12, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <Text style={{ color: theme.text, fontWeight: '800' }}>{editing.name.slice(0, 1)}</Text>
-              </Pressable>
-              {AVATARS.map((icon) => (
-                <Pressable
-                  key={icon}
-                  accessibilityRole="button"
-                  accessibilityLabel={icon}
-                  onPress={() => update((current) => {
-                    const person = current.children.find((item) => item.id === editing.id);
-                    if (!person) return current;
-                    return saveChild(current, { ...person, avatarIcon: icon, photoUri: null });
-                  })}
-                  style={{ width: 48, height: 48, borderRadius: 12, borderWidth: editing.avatarIcon === icon ? 2 : 1, borderColor: editing.avatarIcon === icon ? editing.frameColor : theme.border, alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <MaterialCommunityIcons name={icon as 'account'} size={26} color={editing.frameColor} />
-                </Pressable>
-              ))}
-            </View>
-            <Text style={{ color: theme.muted, fontSize: 13 }}>Farbe</Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {FRAME_COLORS.map((color) => (
-                <Pressable
-                  key={color}
-                  accessibilityRole="button"
-                  onPress={() => update((current) => {
-                    const person = current.children.find((item) => item.id === editing.id);
-                    if (!person) return current;
-                    return saveChild(current, { ...person, frameColor: color });
-                  })}
-                  style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: color, borderWidth: editing.frameColor === color ? 3 : 0, borderColor: '#fff' }}
-                />
-              ))}
-            </View>
-            <Button label="Schließen" variant="secondary" onPress={() => setPickerFor(null)} />
-          </Pressable>
-        </Pressable>
-      ) : null}
     </View>
   );
 }
 
 function personAge(person: Person, now: Date): string {
-  if (person.personType === 'kind') return formatAgeWeeks(person.birthDate, now);
-  const years = Math.floor(ageMonths(person.birthDate, now) / 12);
-  return `${years} Jahre`;
+  const age = formatDisplayAge(person.birthDate, now);
+  if (person.personType !== 'erwachsen') return age;
+  return age.match(/^\d+ Jahre?/)?.[0] ?? age;
 }

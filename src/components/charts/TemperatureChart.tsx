@@ -95,24 +95,38 @@ export function TemperatureChart({
   const ys = shown.map((entry) => entry.celsius);
   const yMin = Math.min(36, ...ys, 37.6) - 0.3;
   const yMax = Math.max(41, ...ys, 40) + 0.25;
-  const verticals: { x: number; strong: boolean; label?: string }[] = [];
+  const verticals: { x: number; strong: boolean; label?: string; labelAxis?: 'horizontal' | 'vertical' }[] = [];
   const labels: { x: number; label: string }[] = [];
   let cursor = startOfBerlinDay(start);
-  while (cursor.getTime() < to + DAY_MS && labels.length < days + 2) {
+  let dayIndex = 0;
+  while (cursor.getTime() < to + DAY_MS && dayIndex < days + 2) {
     const dayStart = cursor.getTime();
     if (dayStart + DAY_MS > from && dayStart < to) {
       verticals.push({ x: dayStart, strong: true });
       const noon = dayStart + 12 * 3_600_000;
-      const margin = (to - from) * 0.12;
-      if (noon > from + margin && noon < to - margin) {
-        labels.push({ x: noon, label: formatShortDay(new Date(noon)) });
+      const margin = (to - from) * 0.08;
+      const showDay = days < 14 ? noon > from + margin && noon < to - margin : dayIndex % 4 === 0;
+      if (showDay && noon > from && noon < to) {
+        const stamp = new Date(noon);
+        const text = days >= 7 ? formatDate(stamp).slice(0, 6) : formatShortDay(stamp);
+        labels.push({ x: noon, label: text });
       }
-      for (const hour of [6, 12, 18]) {
-        const x = dayStart + hour * 3_600_000;
-        if (x > from && x < to) {
-          verticals.push({ x, strong: false, label: x > from + margin && x < to - margin ? `${hour}h` : undefined });
+      if (days < 14) {
+        const upright = days >= 5;
+        const hours = upright ? (days >= 7 ? [12] : [6, 12, 18]) : [6, 12, 18];
+        for (const hour of hours) {
+          const x = dayStart + hour * 3_600_000;
+          if (x <= from || x >= to) continue;
+          const showLabel = upright ? hour === 12 : x > from + margin && x < to - margin;
+          verticals.push({
+            x,
+            strong: false,
+            label: showLabel ? `${hour}h` : undefined,
+            labelAxis: upright ? 'vertical' : 'horizontal',
+          });
         }
       }
+      dayIndex += 1;
     }
     cursor = startOfBerlinDay(shiftBerlinDays(cursor, 1));
   }

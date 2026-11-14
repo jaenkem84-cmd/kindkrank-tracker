@@ -1,3 +1,4 @@
+import { splitGrowth } from './migrate';
 import { zonedDateTime } from '../domain/dates';
 import { createId } from '../domain/ids';
 import type {
@@ -309,13 +310,13 @@ export function createSeedData(now: Date): AppData {
     ],
     medications: [ibuprofen, paracetamol, prospan],
     doses,
-    growth: [
+    growth: splitGrowth([
       ...byDay.values(),
       adultWeight('12.11.2024', 82.4),
       adultWeight('01.06.2025', 81.1),
       adultWeight('15.03.2026', 83.0),
       adultWeight('01.11.2026', 82.6),
-    ],
+    ]),
     vaccinations: [
       ...exampleVaccinations(anna.id),
       {

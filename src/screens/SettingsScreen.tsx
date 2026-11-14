@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, Share, Text, View } from 'react-native';
+import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { PersonFace } from '../components/PersonFace';
 import Constants from 'expo-constants';
 import { Avatar } from '../components/chrome';
 import { Banner, Body, Button, Card, ConfirmDialog, Muted, Screen, Segmented, TextField } from '../components/ui';
@@ -230,7 +233,10 @@ export function InviteAcceptScreen({ token, onDone }: { token: string; onDone: (
   );
 }
 
+const LOOKS = ['face-man', 'face-woman', 'account-child', 'baby-face-outline', 'human-male', 'human-female', 'human-child', 'account', 'account-heart', 'emoticon-happy-outline', 'flower-outline', 'paw'] as const;
+
 export function ProfileScreen({ childId, onDone }: { childId?: string; onDone: () => void }) {
+  const theme = useTheme();
   const { data, update } = useStore();
   const existing = data?.children.find((child) => child.id === childId);
   const [name, setName] = useState(existing?.name ?? '');
@@ -238,6 +244,10 @@ export function ProfileScreen({ childId, onDone }: { childId?: string; onDone: (
   const [personType, setPersonType] = useState<PersonType>(existing?.personType ?? 'kind');
   const [birth, setBirth] = useState(existing ? isoDateToGerman(existing.birthDate) : '');
   const [color, setColor] = useState(existing?.frameColor ?? FRAME_COLORS[1]);
+  const [photoUri, setPhotoUri] = useState<string | null>(existing?.photoUri ?? null);
+  const [avatarIcon, setAvatarIcon] = useState<string | null>(existing?.avatarIcon ?? null);
+  const [lookOpen, setLookOpen] = useState(false);
+  const [photoNote, setPhotoNote] = useState<string | null>(null);
   const [isSelf, setIsSelf] = useState(existing?.isSelf ?? false);
   const [method, setMethod] = useState<MeasurementMethod>(existing?.defaultMethod ?? (existing?.personType === 'erwachsen' ? 'oral' : 'rektal'));
   const [error, setError] = useState<string | null>(null);
@@ -267,8 +277,8 @@ export function ProfileScreen({ childId, onDone }: { childId?: string; onDone: (
       joinStatus: existing?.isAdmin || first ? 'admin' : (existing?.joinStatus ?? 'ohne-app'),
       defaultMethod: method,
       frameColor: color,
-      photoUri: existing?.photoUri ?? null,
-      avatarIcon: existing?.avatarIcon ?? null,
+      photoUri,
+      avatarIcon,
       isExample: existing?.isExample ?? false,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
     };
@@ -284,12 +294,34 @@ export function ProfileScreen({ childId, onDone }: { childId?: string; onDone: (
     onDone();
   }
 
+  async function takePhoto(source: 'camera' | 'library') {
+    try {
+      if (source === 'camera') {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          setPhotoNote('Die Kamera ist nicht freigegeben.');
+          return;
+        }
+      }
+      const result = source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.4 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.4 });
+      if (result.canceled || !result.assets[0]) return;
+      setPhotoUri(result.assets[0].uri);
+      setAvatarIcon(null);
+      setPhotoNote(null);
+    } catch {
+      setPhotoNote('Foto konnte hier nicht gewählt werden.');
+    }
+  }
+
   return (
     <Screen
       title={existing ? existing.name : 'Person'}
       onBack={onDone}
       right={<Button compact label="Speichern" onPress={save} />}
       dialog={
+        <>
         <ConfirmDialog
           visible={confirmDelete}
           title="Person löschen?"
@@ -302,12 +334,41 @@ export function ProfileScreen({ childId, onDone }: { childId?: string; onDone: (
             onDone();
           }}
         />
+        {lookOpen ? (
+          <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }]} onPress={() => setLookOpen(false)}>
+            <Pressable onPress={() => undefined} style={{ backgroundColor: theme.bg, borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 16, gap: 10 }}>
+              <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>Aussehen · {name || 'Person'}</Text>
+              {photoNote ? <Muted>{photoNote}</Muted> : null}
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flex: 1 }}><Button label="Kamera" variant="secondary" onPress={() => void takePhoto('camera')} /></View>
+                <View style={{ flex: 1 }}><Button label="Galerie" variant="secondary" onPress={() => void takePhoto('library')} /></View>
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Initialen" onPress={() => { setAvatarIcon(null); setPhotoUri(null); }} style={{ width: 48, height: 48, borderRadius: 12, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ color: theme.text, fontWeight: '800' }}>{(name || '?').slice(0, 1)}</Text>
+                </Pressable>
+                {LOOKS.map((icon) => (
+                  <Pressable key={icon} accessibilityRole="button" accessibilityLabel={icon} onPress={() => { setAvatarIcon(icon); setPhotoUri(null); }} style={{ width: 48, height: 48, borderRadius: 12, borderWidth: avatarIcon === icon ? 2 : 1, borderColor: avatarIcon === icon ? color : theme.border, alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialCommunityIcons name={icon as 'account'} size={26} color={color} />
+                  </Pressable>
+                ))}
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {FRAME_COLORS.map((item) => (
+                  <Pressable key={item} accessibilityRole="button" onPress={() => setColor(item)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: item, borderWidth: color === item ? 3 : 0, borderColor: '#fff' }} />
+                ))}
+              </View>
+              <Button label="Schließen" variant="secondary" onPress={() => setLookOpen(false)} />
+            </Pressable>
+          </Pressable>
+        ) : null}
+        </>
       }
     >
       {error ? <Banner tone="danger">{error}</Banner> : null}
-      <View style={{ alignItems: 'center' }}>
-        <Avatar name={name || '?'} color={color} size={72} />
-      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel="Aussehen ändern" onPress={() => setLookOpen(true)} style={{ alignItems: 'center' }}>
+        <PersonFace person={{ name: name || '?', frameColor: color, photoUri, avatarIcon }} size={84} />
+      </Pressable>
       <TextField label="Name" value={name} onChangeText={setName} />
       <Segmented
         label="Art"

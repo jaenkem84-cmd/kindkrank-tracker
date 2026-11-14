@@ -236,6 +236,31 @@ export function formatAgeWeeks(birthDateIso: string, now: Date): string {
   return `${weeks} ${days}`;
 }
 
+/** Under 3 months: weeks. Under 1 year: months. After that: years and months. */
+export function formatDisplayAge(birthDateIso: string, now: Date): string {
+  const match = birthDateIso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return '';
+  const by = Number(match[1]);
+  const bm = Number(match[2]);
+  const bd = Number(match[3]);
+  const parts = berlinParts(now);
+  let years = parts.year - by;
+  let months = parts.month - bm;
+  if (parts.day < bd) months -= 1;
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+  if (years < 0) return '0 Wochen';
+  if (years * 12 + months < 3) {
+    const weeks = ageWeeksDays(birthDateIso, now)?.weeks ?? 0;
+    return weeks === 1 ? '1 Woche' : `${weeks} Wochen`;
+  }
+  const yearLabel = years === 1 ? '1 Jahr' : years > 0 ? `${years} Jahre` : '';
+  const monthLabel = months === 1 ? '1 Monat' : months > 0 ? `${months} Monate` : '';
+  return [yearLabel, monthLabel].filter(Boolean).join(' ');
+}
+
 /** Approximate age in months, using the Berlin calendar date of `at`. */
 export function ageMonths(birthDateIso: string, at: Date): number {
   const match = birthDateIso.match(/^(\d{4})-(\d{2})-(\d{2})$/);

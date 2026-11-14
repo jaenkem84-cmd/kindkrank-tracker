@@ -144,6 +144,36 @@ function foldCaregivers(persons: Person[], caregivers: Caregiver[]): Person[] {
   return next;
 }
 
+export function splitGrowth(entries: GrowthEntry[]): GrowthEntry[] {
+  const result: GrowthEntry[] = [];
+  for (const entry of entries) {
+    const pieces: GrowthEntry[] = [];
+    if (entry.weightKg !== undefined) {
+      pieces.push({ id: entry.id, childId: entry.childId, timestamp: entry.timestamp, weightKg: entry.weightKg, isExample: entry.isExample });
+    }
+    if (entry.heightCm !== undefined) {
+      pieces.push({
+        id: pieces.length === 0 ? entry.id : `${entry.id}-groesse`,
+        childId: entry.childId,
+        timestamp: entry.timestamp,
+        heightCm: entry.heightCm,
+        isExample: entry.isExample,
+      });
+    }
+    if (entry.headCm !== undefined) {
+      pieces.push({
+        id: pieces.length === 0 ? entry.id : `${entry.id}-kopf`,
+        childId: entry.childId,
+        timestamp: entry.timestamp,
+        headCm: entry.headCm,
+        isExample: entry.isExample,
+      });
+    }
+    result.push(...(pieces.length > 0 ? pieces : [entry]));
+  }
+  return result;
+}
+
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
@@ -174,7 +204,7 @@ export function migrateAppData(value: unknown): AppData | null {
     temperatures: asArray<TemperatureEntry>(raw.temperatures),
     medications: asArray<Medication>(raw.medications),
     doses: asArray<DoseEntry>(raw.doses),
-    growth: asArray<GrowthEntry>(raw.growth),
+    growth: splitGrowth(asArray<GrowthEntry>(raw.growth)),
     vaccinations: asArray<VaccinationEntry>(raw.vaccinations),
     symptoms: asArray<SymptomEntry>(raw.symptoms),
     customSymptoms: asArray<CustomSymptom>(raw.customSymptoms),
