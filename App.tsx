@@ -3,7 +3,7 @@ import * as Linking from 'expo-linking';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Avatar } from './src/components/chrome';
+import { PersonFace } from './src/components/PersonFace';
 import { inviteTokenFromUrl, isVoiceLink } from './src/navigation/linking';
 import type { CategoryName, Route } from './src/navigation/types';
 import { shiftBerlinDays, sameBerlinDay } from './src/domain/dates';
@@ -17,6 +17,8 @@ import { SymptomScreen } from './src/screens/SymptomScreen';
 import { TemperatureForm, TemperatureScreen } from './src/screens/TemperatureScreen';
 import { VaccinationForm, VaccinationScreen } from './src/screens/VaccinationScreen';
 import { VoiceScreen } from './src/screens/VoiceScreen';
+import { AlarmsScreen } from './src/screens/AlarmsScreen';
+import { InviteComposeScreen } from './src/screens/InviteComposeScreen';
 import { StoreProvider, useStore } from './src/state/store';
 import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
 import type { GrowthMetric } from './src/domain/who/who';
@@ -121,6 +123,7 @@ function Shell() {
       }}
       onMenu={() => setDrawer(true)}
       onFamily={() => push({ name: 'family' })}
+      onInvite={() => push({ name: 'invite-compose' })}
       onVoice={() => push({ name: 'voice', autoStart: true })}
       onCategory={(name) => push({ name })}
     />
@@ -153,12 +156,13 @@ function Shell() {
         <Pressable style={styles.backdrop} onPress={() => setDrawer(false)}>
           <Pressable style={[styles.drawer, { backgroundColor: theme.card }]} onPress={() => undefined}>
             <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 28 }}>
-              <Avatar name={self?.name ?? '?'} color={self?.frameColor ?? theme.accent} size={48} />
+              <PersonFace person={self ?? { name: 'Familie', frameColor: theme.accent }} size={48} />
               <View>
                 <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>{self?.name ?? 'Familie'}</Text>
                 <Text style={{ color: theme.muted, fontSize: 14 }}>{self?.isAdmin ? 'Admin' : 'Familien-Gesundheit'}</Text>
               </View>
             </View>
+            <DrawerItem label="Alarme" onPress={() => push({ name: 'alarms' })} />
             <DrawerItem label="Familie" onPress={() => push({ name: 'family' })} />
             <DrawerItem label="Export" onPress={() => push({ name: 'export' })} />
             <DrawerItem label="Einstellungen" onPress={() => push({ name: 'settings' })} />
@@ -238,7 +242,18 @@ function RouteScreen({
   if (route.name === 'family') {
     return (
       <Screen title="Familie" onBack={onDone}>
-        <FamilyScreen onEdit={(childId) => onPush({ name: 'profile', childId })} onAdd={() => onPush({ name: 'profile' })} />
+        <FamilyScreen
+          onEdit={(childId) => onPush({ name: 'profile', childId })}
+          onAdd={() => onPush({ name: 'profile' })}
+          onInvite={(personId) => onPush({ name: 'invite-compose', personId })}
+        />
+      </Screen>
+    );
+  }
+  if (route.name === 'alarms') {
+    return (
+      <Screen title="Alarme" onBack={onDone}>
+        <AlarmsScreen now={now} />
       </Screen>
     );
   }
@@ -254,6 +269,13 @@ function RouteScreen({
   if (route.name === 'dose-form') return <DoseForm medicationId={route.medicationId} entryId={route.entryId} onDone={onDone} />;
   if (route.name === 'growth-form') return <GrowthForm entryId={route.entryId} onDone={onDone} />;
   if (route.name === 'vaccination-form') return <VaccinationForm productId={route.productId} onDone={onDone} />;
+  if (route.name === 'invite-compose') {
+    return (
+      <Screen title="Einladen" onBack={onDone}>
+        <InviteComposeScreen personId={route.personId} onDone={onDone} />
+      </Screen>
+    );
+  }
   if (route.name === 'invite') return <InviteAcceptScreen token={route.token} onDone={onDone} />;
   return null;
 }

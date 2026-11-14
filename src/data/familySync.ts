@@ -21,17 +21,37 @@ export function getSupabase(): SupabaseClient | null {
   return client;
 }
 
-function newToken(): string {
-  return `${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 8)}`;
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+export function makeInviteCode(): string {
+  let code = '';
+  for (let index = 0; index < 6; index += 1) {
+    code += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
+  }
+  return code;
 }
 
-export function buildInviteMessage(token: string, synced: boolean): string {
-  const lines = ['Einladung zur Familie in Familien-Gesundheit', `kindkrank://invite/${token}`, `Code: ${token}`];
-  const base = process.env.EXPO_PUBLIC_INVITE_WEB_BASE;
-  if (base) lines.push(`${base.replace(/\/$/, '')}/invite/${token}`);
-  else lines.push('Eine https-Seite ist noch nicht eingerichtet. In Familien-Gesundheit den Code unter Einstellungen einfügen. Die Einladung gilt für die ganze Familie.');
-  if (synced) lines.push('Die Einträge werden über den gemeinsamen Ordner geteilt. Die Einladung gilt 7 Tage.');
-  else lines.push('Synchronisation ist noch nicht aktiv. Es werden keine Einträge übertragen, bis Supabase eingerichtet ist.');
+function newToken(): string {
+  return makeInviteCode();
+}
+
+export function buildInviteMessage(token: string, synced: boolean, name = '', sender = ''): string {
+  const link = `kindkrank://invite/${token}`;
+  const hello = name ? `Hallo ${name},` : 'Hallo,';
+  const who = sender ? `${sender} lädt dich ein, die Familie in Familien-Gesundheit mitzunutzen.` : 'Du bist eingeladen, die Familie in Familien-Gesundheit mitzunutzen.';
+  const lines = [
+    hello,
+    '',
+    who,
+    'Dafür brauchst du kein Google-Konto.',
+    '',
+    `Link: ${link}`,
+    `Code: ${token}`,
+    '',
+    'Die Einladung gilt 7 Tage. In der App unter Familie den Code einfügen.',
+  ];
+  if (synced) lines.push('Die Einträge werden über den gemeinsamen Ordner geteilt.');
+  else lines.push('Der gemeinsame Ordner ist noch nicht eingerichtet. Es werden deshalb noch keine Einträge übertragen.');
   return lines.join('\n');
 }
 

@@ -8,6 +8,8 @@ export type Route =
   | { name: 'settings' }
   | { name: 'family' }
   | { name: 'export' }
+  | { name: 'alarms' }
+  | { name: 'invite-compose'; personId?: string }
   | { name: CategoryName }
   | { name: 'temp-form'; entryId?: string }
   | { name: 'med-form'; medicationId?: string; prefillName?: string }

@@ -34,6 +34,10 @@ export type Person = {
   joinStatus: JoinStatus;
   defaultMethod: MeasurementMethod;
   frameColor: string;
+  /** Gallery or camera image. Shown instead of the preset avatar. */
+  photoUri?: string | null;
+  /** MaterialCommunityIcons name. Empty means initials in the frame colour. */
+  avatarIcon?: string | null;
   isExample: boolean;
   createdAt: string;
 };
@@ -135,6 +139,31 @@ export type VaccinationEntry = {
 };
 
 /** A symptom the family added. Shared by every person, not tied to one child. */
+export const INVITE_RELATIONS = [
+  { id: 'partner', label: 'Partner/in' },
+  { id: 'mutter', label: 'Mutter' },
+  { id: 'vater', label: 'Vater' },
+  { id: 'grossmutter', label: 'Großmutter' },
+  { id: 'grossvater', label: 'Großvater' },
+  { id: 'geschwister', label: 'Geschwister' },
+  { id: 'betreuer', label: 'Betreuer/in' },
+  { id: 'sonstige', label: 'Sonstige' },
+] as const;
+
+export type InviteRelation = (typeof INVITE_RELATIONS)[number]['id'];
+
+/** Relationship lives on the invite, not on the person's profile. */
+export type FamilyInvite = {
+  id: string;
+  token: string;
+  personId: string | null;
+  name: string;
+  relation: InviteRelation;
+  createdAt: string;
+  expiresAt: string;
+  status: 'offen' | 'zurueckgezogen';
+};
+
 export type CustomSymptom = {
   id: string;
   name: string;
@@ -167,6 +196,7 @@ export type AppData = {
   symptoms: SymptomEntry[];
   customSymptoms: CustomSymptom[];
   reminders: Reminder[];
+  invites: FamilyInvite[];
   settings: Settings;
 };
 

@@ -20,7 +20,7 @@ Technisch: Expo SDK 58, React Native, TypeScript. Der erste Start legt Beispield
 8. Deep Link `kindkrank://voice` öffnet direkt die Spracheingabe. Im APK gibt es dazu eine Android-App-Verknüpfung.
 9. Speicher hinter einer Repository-Schnittstelle. Dieser Prototyp speichert lokal (AsyncStorage). Kein Konto, kein API-Schlüssel. Der Plan für einen Familien-Einladungslink steht weiter unten.
 10. In den Einstellungen exportierst du **alle** Daten als ZIP mit einer CSV pro Tabelle, einschließlich Impfungen und Symptome (Semikolon, UTF-8 mit BOM). Ohne Wochenfilter.
-11. Startseite wie ein Tagesbuch: Name und Alter in Wochen und Tagen, Profilbild mit Rahmenfarbe, Tag vor und zurück, Zähler für den Tag, unten die Leiste Temperatur, Medikation, Impfung, Symptome, Gewicht, Größe, Kopfumfang. Hamburger-Menü: Einträge und Einstellungen. Kein eigener Punkt Analyse und keine zentrale Erinnerungsliste. Erinnerungen sitzen bei Temperatur und bei jedem Medikament. Auf dem Handy sind das lokale Mitteilungen. Im Browser werden sie nur gespeichert.
+11. Startseite wie ein Tagesbuch: Name und Alter in Wochen und Tagen, Profilbild mit Rahmenfarbe, Tag vor und zurück, Zähler für den Tag, unten die Leiste Temperatur, Medikation, Impfung, Symptome, Gewicht, Größe, Kopfumfang. Hamburger-Menü: Alarme, Familie, Export und Einstellungen. Kein eigener Punkt Analyse und keine zentrale Erinnerungsliste. Erinnerungen sitzen bei Temperatur und bei jedem Medikament. Auf dem Handy sind das lokale Mitteilungen. Im Browser werden sie nur gespeichert.
 
 ## Am PC ansehen
 

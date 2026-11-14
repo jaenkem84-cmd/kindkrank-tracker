@@ -153,6 +153,8 @@ export function createSeedData(now: Date): AppData {
     joinStatus: 'admin',
     defaultMethod: 'oral',
     frameColor: '#3B82F6',
+    avatarIcon: 'face-man',
+    photoUri: null,
     isExample: true,
     createdAt: now.toISOString(),
   };
@@ -168,6 +170,8 @@ export function createSeedData(now: Date): AppData {
     joinStatus: 'ohne-app',
     defaultMethod: 'axillar',
     frameColor: '#8B5CF6',
+    avatarIcon: 'face-woman',
+    photoUri: null,
     isExample: true,
     createdAt: now.toISOString(),
   };
@@ -183,6 +187,8 @@ export function createSeedData(now: Date): AppData {
     joinStatus: 'ohne-app',
     defaultMethod: 'rektal',
     frameColor: '#E85A9B',
+    avatarIcon: 'account-child',
+    photoUri: null,
     isExample: true,
     createdAt: now.toISOString(),
   };
@@ -327,6 +333,7 @@ export function createSeedData(now: Date): AppData {
     ],
     symptoms: exampleSymptoms(anna.id),
     customSymptoms: [],
+    invites: [],
     reminders: [
       {
         id: createId('erinnerung'),
@@ -337,6 +344,15 @@ export function createSeedData(now: Date): AppData {
         mode: 'after',
         times: [],
         hoursAfter: 6,
+      },
+      {
+        id: createId('erinnerung'),
+        childId: michael.id,
+        kind: 'temperature',
+        enabled: false,
+        mode: 'daily',
+        times: ['08:00', '20:00'],
+        hoursAfter: 0,
       },
     ],
     settings: {

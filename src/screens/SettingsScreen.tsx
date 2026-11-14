@@ -7,6 +7,7 @@ import { birthDateToIso, isoDateToGerman, parseGermanDate } from '../domain/date
 import { createId } from '../domain/ids';
 import {
   FRAME_COLORS,
+  INVITE_RELATIONS,
   MEASUREMENT_METHODS,
   METHOD_LABELS,
   MEDICAL_DISCLAIMER,
@@ -18,8 +19,8 @@ import {
   type PersonType,
   type Sex,
 } from '../domain/types';
-import { acceptFamilyInvite, createFamilyInvite, isSupabaseConfigured } from '../data/familySync';
-import { markInvited, removeChild, saveChild, saveSettings } from '../data/mutations';
+import { acceptFamilyInvite, buildInviteMessage, isSupabaseConfigured, makeInviteCode } from '../data/familySync';
+import { removeChild, saveChild, saveSettings } from '../data/mutations';
 import { deleteExampleData } from '../data/seed';
 import { shareAllData } from '../export/shareCsv';
 import { useStore } from '../state/store';
@@ -89,7 +90,15 @@ export function ExportScreen() {
   );
 }
 
-export function FamilyScreen({ onEdit, onAdd }: { onEdit: (id: string) => void; onAdd: () => void }) {
+export function FamilyScreen({
+  onEdit,
+  onAdd,
+  onInvite,
+}: {
+  onEdit: (id: string) => void;
+  onAdd: () => void;
+  onInvite: (personId?: string) => void;
+}) {
   const theme = useTheme();
   const { data, update, loadError } = useStore();
   const [notice, setNotice] = useState<string | null>(null);
@@ -98,20 +107,44 @@ export function FamilyScreen({ onEdit, onAdd }: { onEdit: (id: string) => void; 
   const snapshot = data;
   const admin = snapshot.children.find((person) => person.isAdmin);
 
-  async function invite(person: Person) {
-    try {
-      const result = await createFamilyInvite(snapshot);
-      const withStatus = markInvited(result.data, person.id);
-      update(() => withStatus);
-      setNotice(result.message);
-      await Share.share({ message: result.message });
-    } catch (reason: unknown) {
-      setNotice(reason instanceof Error ? reason.message : 'Einladung fehlgeschlagen.');
-    }
+  const pending = (snapshot.invites ?? []).filter((invite) => invite.status === 'offen');
+
+  function resend(inviteId: string) {
+    const invite = pending.find((item) => item.id === inviteId);
+    if (!invite) return;
+    const token = makeInviteCode();
+    const next = {
+      ...invite,
+      token,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+    };
+    const sender = snapshot.children.find((person) => person.isSelf)?.name ?? admin?.name ?? '';
+    update((current) => ({
+      ...current,
+      invites: (current.invites ?? []).map((item) => (item.id === inviteId ? next : item)),
+    }));
+    const message = buildInviteMessage(token, isSupabaseConfigured(), next.name, sender);
+    void Share.share({ message });
+    setNotice(message);
+  }
+
+  function withdraw(inviteId: string) {
+    update((current) => {
+      const invite = (current.invites ?? []).find((item) => item.id === inviteId);
+      return {
+        ...current,
+        invites: (current.invites ?? []).map((item) => (item.id === inviteId ? { ...item, status: 'zurueckgezogen' as const } : item)),
+        children: current.children.map((person) =>
+          invite?.personId === person.id && person.joinStatus === 'eingeladen' ? { ...person, joinStatus: 'ohne-app' as const } : person,
+        ),
+      };
+    });
   }
 
   return (
     <View style={{ gap: 12 }}>
+      <Button label="Familienmitglied einladen" onPress={() => onInvite()} />
       <Body>{admin ? `${admin.name} ist Admin und legt die Familie an.` : 'Ein Admin legt die Familie an.'}</Body>
       {snapshot.children.map((person) => (
         <Card key={person.id}>
@@ -129,12 +162,23 @@ export function FamilyScreen({ onEdit, onAdd }: { onEdit: (id: string) => void; 
               </Text>
             </View>
           </Pressable>
-          {person.personType === 'erwachsen' && !person.isAdmin ? (
-            <Button compact label={person.joinStatus === 'eingeladen' ? 'Erneut einladen' : 'Einladen'} variant="secondary" onPress={() => void invite(person)} />
+          {person.personType === 'erwachsen' && !person.isAdmin && person.joinStatus !== 'beigetreten' ? (
+            <Button compact label="Einladen" variant="secondary" onPress={() => onInvite(person.id)} />
           ) : null}
         </Card>
       ))}
-      <Button label="Person hinzufügen" onPress={onAdd} />
+      <Button label="Person hinzufügen" variant="secondary" onPress={onAdd} />
+      {pending.length > 0 ? <Body>Offene Einladungen</Body> : null}
+      {pending.map((invite) => (
+        <Card key={invite.id}>
+          <Text style={{ color: theme.text, fontSize: 16, fontWeight: '700' }}>{invite.name}</Text>
+          <Muted>
+            {INVITE_RELATIONS.find((item) => item.id === invite.relation)?.label ?? invite.relation} · Code {invite.token} · bis {isoDateToGerman(invite.expiresAt.slice(0, 10))}
+          </Muted>
+          <Button compact label="Erneut senden" variant="secondary" onPress={() => resend(invite.id)} />
+          <Button compact label="Zurückziehen" variant="danger" onPress={() => withdraw(invite.id)} />
+        </Card>
+      ))}
       {notice ? (
         <Card>
           <Body>Einladung</Body>
@@ -223,6 +267,8 @@ export function ProfileScreen({ childId, onDone }: { childId?: string; onDone: (
       joinStatus: existing?.isAdmin || first ? 'admin' : (existing?.joinStatus ?? 'ohne-app'),
       defaultMethod: method,
       frameColor: color,
+      photoUri: existing?.photoUri ?? null,
+      avatarIcon: existing?.avatarIcon ?? null,
       isExample: existing?.isExample ?? false,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
     };

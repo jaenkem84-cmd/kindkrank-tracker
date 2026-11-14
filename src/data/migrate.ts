@@ -7,6 +7,7 @@ import type {
   Medication,
   Person,
   Reminder,
+  FamilyInvite,
   Settings,
   SymptomEntry,
   CustomSymptom,
@@ -53,6 +54,8 @@ function normalizePerson(item: unknown, fallbackMethod: MeasurementMethod): Pers
     joinStatus,
     defaultMethod: isMethod(raw.defaultMethod) ? raw.defaultMethod : personType === 'erwachsen' ? 'oral' : fallbackMethod,
     frameColor: typeof raw.frameColor === 'string' ? raw.frameColor : '#3B82F6',
+    photoUri: typeof raw.photoUri === 'string' ? raw.photoUri : null,
+    avatarIcon: typeof raw.avatarIcon === 'string' ? raw.avatarIcon : null,
     isExample: raw.isExample === true,
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date(0).toISOString(),
   };
@@ -176,6 +179,7 @@ export function migrateAppData(value: unknown): AppData | null {
     symptoms: asArray<SymptomEntry>(raw.symptoms),
     customSymptoms: asArray<CustomSymptom>(raw.customSymptoms),
     reminders: asArray<Reminder>(raw.reminders),
+    invites: asArray<FamilyInvite>(raw.invites),
     settings: {
       defaultMethod: fallbackMethod,
       defaultGivenBy: typeof settingsIn.defaultGivenBy === 'string' ? settingsIn.defaultGivenBy : '',
