@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "Familien-Gesundheit",
+    "slug": "kindkrank-tracker",
+    "scheme": "kindkrank",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "de.kindkrank.tracker"
+    },
+    "android": {
+      "package": "de.kindkrank.tracker",
+      "adaptiveIcon": {
+        "backgroundColor": "#0E6B68",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a0440d97-fdfd-493d-908e-790b802845d9"
+      }
+    },
+    "plugins": [
+      "expo-sharing",
+      "expo-notifications",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Familien-Gesundheit nutzt das Mikrofon nur, während du einen Eintrag sprichst.",
+          "speechRecognitionPermission": "Die Spracherkennung wandelt den gesprochenen Eintrag in Text um. Der Text bleibt in der App.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
+      ],
+      "expo-audio",
+      "./plugins/withVoiceShortcut",
+      "./plugins/withVoiceIntent"
+    ]
+  }
+}
