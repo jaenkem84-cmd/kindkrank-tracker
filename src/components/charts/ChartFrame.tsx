@@ -13,6 +13,8 @@ export type ChartPoint = {
   fill?: string;
   r?: number;
   opacity?: number;
+  stroke?: string;
+  strokeWidth?: number;
   /** False for overlay marks that should not be selected. */
   hit?: boolean;
   /** MaterialCommunityIcons name drawn instead of a dot, when there is room. */
@@ -88,12 +90,12 @@ export function ChartFrame({
     .x((item) => xOf(item.x))
     .y((item) => yOf(item.y));
 
-  function pick(locationX: number) {
+  function pick(locationX: number, locationY: number) {
     let best: ChartPoint | null = null;
-    let bestDist = 28;
+    let bestDist = 26;
     for (const point of points) {
       if (point.hit === false || !point.id) continue;
-      const dist = Math.abs(xOf(point.x) - locationX);
+      const dist = Math.hypot(xOf(point.x) - locationX, yOf(point.y) - locationY);
       if (dist < bestDist) {
         best = point;
         bestDist = dist;
@@ -105,7 +107,7 @@ export function ChartFrame({
     }
   }
 
-  const tipLeft = selected ? Math.min(Math.max(xOf(selected.x) - 78, 8), Math.max(width - 168, 8)) : 0;
+  const tipLeft = selected ? Math.min(Math.max(xOf(selected.x) - 90, 8), Math.max(width - 220, 8)) : 0;
 
   return (
     <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} {...panHandlers}>
@@ -232,12 +234,13 @@ export function ChartFrame({
           const chosen = Boolean(point.id && point.id === activeId);
           const color = point.fill ?? theme.accent;
           const radius = point.r ?? 3;
+          const keepsStyle = point.stroke !== undefined;
           return (
             <G key={point.id ?? `p-${index}`}>
-              {chosen ? (
+              {chosen && !keepsStyle ? (
                 <Circle cx={xOf(point.x)} cy={yOf(point.y)} r={radius + 8} fill={color} opacity={0.22} />
               ) : null}
-              {chosen ? (
+              {chosen && !keepsStyle ? (
                 <Circle
                   cx={xOf(point.x)}
                   cy={yOf(point.y)}
@@ -250,11 +253,11 @@ export function ChartFrame({
               <Circle
                 cx={xOf(point.x)}
                 cy={yOf(point.y)}
-                r={chosen ? radius + 1.5 : radius}
+                r={chosen && !keepsStyle ? radius + 1.5 : radius}
                 fill={color}
                 opacity={point.opacity ?? 1}
-                stroke={chosen ? color : theme.card}
-                strokeWidth={chosen ? 0 : 1}
+                stroke={keepsStyle ? point.stroke : chosen ? color : theme.card}
+                strokeWidth={keepsStyle ? (point.strokeWidth ?? 1) : chosen ? 0 : 1}
                 onPress={() => {
                   if (!point.id || point.hit === false) return;
                   setPickedId(point.id);
@@ -280,8 +283,8 @@ export function ChartFrame({
         accessibilityRole="adjustable"
         accessibilityLabel="Diagramm, Punkt auswählen"
         onPress={(event) => {
-          const native = event.nativeEvent as { locationX?: number; offsetX?: number };
-          pick(native.locationX || native.offsetX || 0);
+          const native = event.nativeEvent as { locationX?: number; locationY?: number; offsetX?: number; offsetY?: number };
+          pick((native.locationX || native.offsetX || 0) + pad.left, (native.locationY || native.offsetY || 0) + pad.top);
         }}
         style={{ position: 'absolute', left: pad.left, right: pad.right, top: pad.top, height: innerH }}
       />
@@ -300,7 +303,9 @@ export function ChartFrame({
             paddingVertical: 4,
           }}
         >
-          <Text style={{ color: theme.text, fontSize: 12, fontVariant: ['tabular-nums'] }}>{selected.label}</Text>
+          <Text style={{ color: theme.text, fontSize: 12, lineHeight: 16, maxWidth: 210 }} numberOfLines={2}>
+            {selected.label}
+          </Text>
         </View>
       ) : null}
     </View>

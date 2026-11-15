@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { PanResponder, Pressable, Text, View } from 'react-native';
+import { Modal, PanResponder, Pressable, Text, useWindowDimensions, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { endOfBerlinDay, formatDate, formatShortDay, formatTime, shiftBerlinDays, startOfBerlinDay } from '../../domain/dates';
 import { formatDecimal } from '../../domain/format';
 import { REFERENCE_LINES } from '../../domain/fever';
@@ -9,24 +11,13 @@ import type { CustomSymptom, DoseEntry, Medication, SymptomEntry, TemperatureEnt
 import { useTheme } from '../../theme/ThemeProvider';
 import { SymptomGlyph } from '../SymptomGlyph';
 import { ChartFrame } from './ChartFrame';
+import { doseMarkerPaint, shortMedicationName, symptomMarkColor, temperatureOnCurve } from './doseMarks';
 
-const MARKER_COLORS = ['#E7C27A', '#7EB6E0', '#D7A0AE', '#9BC7A4'];
 const TEMP_RED = '#FF5C6C';
 const DAY_MS = 86_400_000;
 const RANGES = [2, 5, 7, 14];
 
-export function TemperatureChart({
-  entries,
-  doses,
-  medications,
-  symptoms = [],
-  customSymptoms = [],
-  selectedId = null,
-  onSelectId,
-  now,
-  days,
-  onDays,
-}: {
+export function TemperatureChart(props: {
   entries: TemperatureEntry[];
   doses: DoseEntry[];
   medications: Medication[];
@@ -38,7 +29,45 @@ export function TemperatureChart({
   days: number;
   onDays: (days: number) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const view = <TemperatureChartView {...props} expanded={expanded} onToggleExpand={() => setExpanded((value) => !value)} />;
+  if (!expanded) return view;
+  return (
+    <Modal visible animationType="fade" supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} onRequestClose={() => setExpanded(false)}>
+      <LandscapeStage>{view}</LandscapeStage>
+    </Modal>
+  );
+}
+
+function TemperatureChartView({
+  entries,
+  doses,
+  medications,
+  symptoms = [],
+  customSymptoms = [],
+  selectedId = null,
+  onSelectId,
+  now,
+  days,
+  onDays,
+  expanded = false,
+  onToggleExpand,
+}: {
+  entries: TemperatureEntry[];
+  doses: DoseEntry[];
+  medications: Medication[];
+  symptoms?: SymptomEntry[];
+  customSymptoms?: CustomSymptom[];
+  selectedId?: string | null;
+  onSelectId?: (id: string) => void;
+  now: Date;
+  days: number;
+  onDays: (days: number) => void;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
+}) {
   const theme = useTheme();
+  const [plotHeight, setPlotHeight] = useState(292);
   const [showSymptoms, setShowSymptoms] = useState(true);
   const [gearOpen, setGearOpen] = useState(false);
   const [hiddenMeds, setHiddenMeds] = useState<string[]>(() =>
@@ -139,7 +168,7 @@ export function TemperatureChart({
     .map((value) => ({ y: value, label: formatDecimal(value, 0) }));
   const medIndex = new Map(medications.map((med, index) => [med.id, index]));
   const visibleMeds = medications.filter((med) => !hiddenMeds.includes(med.id));
-  const markerY = yMin + (yMax - yMin) * (days === 5 ? 0.16 : 0.06);
+  const symptomY = yMin + (yMax - yMin) * (days === 5 ? 0.2 : 0.08);
   const markers = doses.filter((dose) => {
     const time = new Date(dose.timestamp).getTime();
     return time >= from && time <= to && visibleMeds.some((med) => med.id === dose.medicationId);
@@ -150,7 +179,7 @@ export function TemperatureChart({
         return time >= from && time <= to;
       })
     : [];
-  const symptomColor = theme.dark ? '#E7C27A' : '#8A5A16';
+  const symptomColor = symptomMarkColor(theme.dark);
   const legendSymptoms: { key: string; label: string; icon: string | null }[] = [];
   const seenSymptoms = new Set<string>();
   for (const item of symptomMarks) {
@@ -167,7 +196,7 @@ export function TemperatureChart({
   const latestLabel = latest ? formatDate(new Date(latest.timestamp)).slice(0, 6) : '';
 
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: 8, flex: expanded ? 1 : undefined, padding: expanded ? 12 : 0, backgroundColor: expanded ? theme.bg : undefined }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         {RANGES.map((range) => {
           const selected = range === days;
@@ -195,6 +224,14 @@ export function TemperatureChart({
         <View style={{ flex: 1 }} />
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={expanded ? 'Diagramm verkleinern' : 'Diagramm vergrößern'}
+          onPress={onToggleExpand}
+          style={{ width: 44, height: 36, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <MaterialCommunityIcons name={expanded ? 'arrow-collapse' : 'arrow-expand'} size={22} color={theme.text} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
           accessibilityLabel="Diagramm einstellen"
           onPress={() => setGearOpen((open) => !open)}
           style={{ width: 44, height: 36, alignItems: 'center', justifyContent: 'center' }}
@@ -207,10 +244,9 @@ export function TemperatureChart({
           <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '700' }}>Letzte Messung: {latestLabel}</Text>
         </Pressable>
       ) : null}
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginHorizontal: -8 }}>
-        <View style={{ flex: 1, minWidth: 0 }} onLayout={(event) => { widthRef.current = event.nativeEvent.layout.width; }}>
+      <View style={{ flex: expanded ? 1 : undefined }} onLayout={(event) => { widthRef.current = event.nativeEvent.layout.width; if (expanded) setPlotHeight(Math.max(160, event.nativeEvent.layout.height)); }}>
         <ChartFrame
-          padLeft={30}
+          height={expanded ? plotHeight : 292}
           panHandlers={pan.panHandlers}
           xDomain={[from, to]}
           yDomain={[yMin, yMax]}
@@ -234,22 +270,13 @@ export function TemperatureChart({
             },
           ]}
           points={[
-            ...markers.map((dose) => ({
-              x: new Date(dose.timestamp).getTime(),
-              y: markerY,
-              label: '',
-              fill: MARKER_COLORS[(medIndex.get(dose.medicationId) ?? 0) % MARKER_COLORS.length],
-              r: 3.5,
-              opacity: 0.4,
-              hit: false as const,
-            })),
             ...symptomMarks.map((item) => {
               const icon = symptomMarks.length <= 8 ? symptomIconName(item.symptomId, customSymptoms) : null;
               return {
                 x: new Date(item.timestamp).getTime(),
-                y: markerY + (yMax - yMin) * (days === 5 ? 0.07 : 0.08),
+                y: symptomY,
                 label: '',
-                fill: theme.dark ? '#E7C27A' : '#8A5A16',
+                fill: symptomColor,
                 r: 2.5,
                 opacity: icon ? 1 : 0.55,
                 hit: false as const,
@@ -264,34 +291,47 @@ export function TemperatureChart({
               fill: TEMP_RED,
               r: 3,
             })),
+            ...markers.flatMap((dose) => {
+              const at = new Date(dose.timestamp).getTime();
+              const y = temperatureOnCurve(entries, at);
+              const medication = medications.find((item) => item.id === dose.medicationId);
+              if (y === null || !medication) return [];
+              const paint = doseMarkerPaint(medIndex.get(dose.medicationId) ?? 0);
+              const when = new Date(dose.timestamp);
+              return [{
+                id: `dose:${dose.id}`,
+                x: at,
+                y,
+                label: `${shortMedicationName(medication.name)} ${dose.doseText} · ${formatShortDay(when)} ${formatTime(when)}`,
+                fill: paint.fill,
+                opacity: paint.opacity,
+                r: paint.r,
+                stroke: paint.stroke,
+                strokeWidth: paint.strokeWidth,
+              }];
+            }),
           ]}
         />
-        </View>
-        <View style={{ width: 72, paddingTop: 18, gap: 5 }}>
-          <LegendRow
+      </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 10, rowGap: 4 }}>
+          <LegendChip
             label="Temperatur"
             color={theme.text}
-            mark={<View style={{ width: 14, height: 3, borderRadius: 2, backgroundColor: TEMP_RED }} />}
+            mark={<View style={{ width: 14, height: 2, borderRadius: 1, backgroundColor: TEMP_RED }} />}
           />
-          {legendMeds.map((med) => (
-            <LegendRow
-              key={med.id}
-              label={med.name.replace(' (Beispiel)', '')}
-              color={theme.text}
-              mark={
-                <View
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: MARKER_COLORS[(medIndex.get(med.id) ?? 0) % MARKER_COLORS.length],
-                  }}
-                />
-              }
-            />
-          ))}
+          {legendMeds.map((med) => {
+            const paint = doseMarkerPaint(medIndex.get(med.id) ?? 0);
+            return (
+              <LegendChip
+                key={med.id}
+                label={shortMedicationName(med.name)}
+                color={theme.text}
+                mark={<DoseSwatch paint={paint} />}
+              />
+            );
+          })}
           {legendSymptoms.map((item) => (
-            <LegendRow
+            <LegendChip
               key={item.key}
               label={item.label}
               color={theme.text}
@@ -299,13 +339,12 @@ export function TemperatureChart({
                 item.icon ? (
                   <SymptomGlyph name={item.icon} color={symptomColor} size={12} />
                 ) : (
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: symptomColor }} />
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: symptomColor, opacity: 0.55 }} />
                 )
               }
             />
           ))}
         </View>
-      </View>
       {gearOpen ? (
         <View style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 12, gap: 8, backgroundColor: theme.card }}>
           <Text style={{ color: theme.text, fontWeight: '700' }}>Im Diagramm</Text>
@@ -355,13 +394,78 @@ function curveThroughWindow(entries: TemperatureEntry[], from: number, to: numbe
   return sorted.slice(Math.max(0, first - 1), last + 2).map(pointOf);
 }
 
-function LegendRow({ mark, label, color }: { mark: ReactNode; label: string; color: string }) {
+function LegendChip({ mark, label, color }: { mark: ReactNode; label: string; color: string }) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-      <View style={{ width: 14, height: 14, alignItems: 'center', justifyContent: 'center' }}>{mark}</View>
-      <Text style={{ flex: 1, color, fontSize: 10, lineHeight: 12 }} numberOfLines={2}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: 128 }}>
+      {mark}
+      <Text style={{ flexShrink: 1, color, fontSize: 10, lineHeight: 13 }} numberOfLines={1}>
         {label}
       </Text>
+    </View>
+  );
+}
+
+function DoseSwatch({ paint }: { paint: { fill: string; opacity: number; r: number; stroke: string; strokeWidth: number } }) {
+  const box = (paint.r + paint.strokeWidth) * 2;
+  return (
+    <Svg width={box} height={box}>
+      <Circle
+        cx={box / 2}
+        cy={box / 2}
+        r={paint.r}
+        fill={paint.fill}
+        opacity={paint.opacity}
+        stroke={paint.stroke}
+        strokeWidth={paint.strokeWidth}
+      />
+    </Svg>
+  );
+}
+
+function LandscapeStage({ children }: { children: ReactNode }) {
+  const { width, height } = useWindowDimensions();
+  const locked = useRef(false);
+  const [nativeLandscape, setNativeLandscape] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const orientation = require('expo-screen-orientation') as {
+          lockAsync: (lock: string) => Promise<void>;
+          OrientationLock: { LANDSCAPE: string; PORTRAIT_UP: string };
+        };
+        await orientation.lockAsync(orientation.OrientationLock.LANDSCAPE);
+        if (cancelled) {
+          await orientation.lockAsync(orientation.OrientationLock.PORTRAIT_UP);
+          return;
+        }
+        locked.current = true;
+        setNativeLandscape(true);
+      } catch {
+        if (!cancelled) setNativeLandscape(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (!locked.current) return;
+      try {
+        const orientation = require('expo-screen-orientation') as {
+          lockAsync: (lock: string) => Promise<void>;
+          OrientationLock: { PORTRAIT_UP: string };
+        };
+        void orientation.lockAsync(orientation.OrientationLock.PORTRAIT_UP);
+      } catch {
+        // The portrait lock of the app stays as it was.
+      }
+    };
+  }, []);
+  const themeBg = useTheme().bg;
+  if (nativeLandscape || width > height) {
+    return <View style={{ flex: 1, backgroundColor: themeBg }}>{children}</View>;
+  }
+  return (
+    <View style={{ flex: 1, backgroundColor: themeBg, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: height, height: width, transform: [{ rotate: '90deg' }] }}>{children}</View>
     </View>
   );
 }
