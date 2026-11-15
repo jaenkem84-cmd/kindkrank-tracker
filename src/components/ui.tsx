@@ -223,7 +223,7 @@ export function Banner({ tone = 'warning', children }: { tone?: 'warning' | 'dan
       : tone === 'ok'
         ? { bg: theme.okSoft, text: theme.ok }
         : tone === 'info'
-          ? { bg: theme.accentSoft, text: theme.accent }
+          ? { bg: theme.dark ? '#2A313B' : '#E6E2DA', text: theme.dark ? '#C5CDD6' : '#5C6773' }
           : { bg: theme.warningSoft, text: theme.warning };
   return (
     <View style={[styles.banner, { backgroundColor: colors.bg }]}>

@@ -14,6 +14,8 @@ describe('Sprach-Link', () => {
   it('liest die Vorschaustände nur aus dem Query', () => {
     assert.equal(voicePreviewFromUrl('http://localhost:8081/?voicePreview=listening'), 'listening');
     assert.equal(voicePreviewFromUrl('kindkrank://voice?voicePreview=confirm'), 'confirm');
+    assert.equal(voicePreviewFromUrl('http://localhost:8081/?voicePreview=saved'), 'saved');
+    assert.equal(voicePreviewFromUrl('http://localhost:8081/?voicePreview=unknown'), 'unknown');
     assert.equal(voicePreviewFromUrl('kindkrank://voice'), null);
   });
 });

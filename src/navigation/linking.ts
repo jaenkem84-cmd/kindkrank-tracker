@@ -5,13 +5,21 @@ export function inviteTokenFromUrl(url: string | null | undefined): string | nul
   return match?.[1] ?? null;
 }
 
-export type VoicePreview = 'listening' | 'confirm';
+export type VoicePreview = 'listening' | 'confirm' | 'saved' | 'unknown' | 'unavailable';
 
 /** Screenshot and review states. Not used by the assistant deep link. */
 export function voicePreviewFromUrl(url: string | null | undefined): VoicePreview | null {
   if (!url) return null;
-  const match = url.match(/[?&]voicePreview=(listening|confirm)\b/);
-  if (match?.[1] === 'listening' || match?.[1] === 'confirm') return match[1];
+  const match = url.match(/[?&]voicePreview=(listening|confirm|saved|unknown|unavailable)\b/);
+  if (
+    match?.[1] === 'listening' ||
+    match?.[1] === 'confirm' ||
+    match?.[1] === 'saved' ||
+    match?.[1] === 'unknown' ||
+    match?.[1] === 'unavailable'
+  ) {
+    return match[1];
+  }
   return null;
 }
 

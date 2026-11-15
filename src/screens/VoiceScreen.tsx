@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Animated, Pressable, Text, View } from 'react-native';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useKeepAwake } from 'expo-keep-awake';
 import { Banner, Body, Button, Card, ConfirmDialog, DateTimeFields, MicIcon, Muted, Screen, Segmented, TextField } from '../components/ui';
 import { combineBerlin, dateFieldValue, timeFieldValue } from '../domain/dates';
@@ -69,7 +70,7 @@ type Draft =
       time: string;
     };
 
-type Phase = 'listening' | 'confirm' | 'saved' | 'clarify' | 'typing';
+type Phase = 'listening' | 'confirm' | 'saved' | 'clarify' | 'typing' | 'unknown' | 'unavailable';
 type Block = 'person' | 'limit' | 'text' | null;
 
 type UndoBag = {
@@ -128,17 +129,34 @@ export function VoiceScreen({
   onDone,
 }: {
   autoStart?: boolean;
-  preview?: 'listening' | 'confirm';
+  preview?: 'listening' | 'confirm' | 'saved' | 'unknown' | 'unavailable';
   onDone: () => void;
 }) {
   const theme = useTheme();
   const { data, activeChild, update } = useStore();
   const [support] = useState<SpeechSupport>(() => (preview ? 'native' : speechSupport()));
-  const [phase, setPhase] = useState<Phase>(preview === 'confirm' ? 'confirm' : preview === 'listening' ? 'listening' : 'typing');
+  const [phase, setPhase] = useState<Phase>(
+    preview === 'confirm'
+      ? 'confirm'
+      : preview === 'listening'
+        ? 'listening'
+        : preview === 'saved'
+          ? 'saved'
+          : preview === 'unknown'
+            ? 'unknown'
+            : preview === 'unavailable'
+              ? 'unavailable'
+              : 'typing',
+  );
   const [text, setText] = useState('');
   const [partial, setPartial] = useState(preview === 'listening' ? 'Anna 38,5' : '');
   const [listening, setListening] = useState(preview === 'listening');
   const [notice, setNotice] = useState<string | null>(null);
+  const [heard, setHeard] = useState(preview === 'unknown' ? 'hm irgendwas' : '');
+  const [savedLine, setSavedLine] = useState(preview === 'saved' ? 'Eingetragen: 15.11.2026, 21:42 Uhr, 38,5 °C' : '');
+  const [helpOpen, setHelpOpen] = useState(false);
+  const pulse = useRef(new Animated.Value(0)).current;
+  const returnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [spoken, setSpoken] = useState(preview === 'confirm' ? 'Anna, 38,5 Grad rektal, 1:52 Uhr. Speichern?' : '');
   const [summary, setSummary] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -173,6 +191,22 @@ export function VoiceScreen({
     timers.current = [];
     countdownRef.current = null;
     setCountdown(null);
+    if (returnTimer.current) {
+      clearTimeout(returnTimer.current);
+      returnTimer.current = null;
+    }
+  }
+
+  function wipe() {
+    setNotice(null);
+    setSpoken('');
+    setError(null);
+    setHeard('');
+  }
+
+  function armReturn(ms: number, next: () => void) {
+    if (returnTimer.current) clearTimeout(returnTimer.current);
+    returnTimer.current = setTimeout(next, ms);
   }
 
   function stopMic() {
@@ -187,6 +221,7 @@ export function VoiceScreen({
       generation.current += 1;
       session.current?.stop();
       for (const id of timers.current) clearInterval(id);
+      if (returnTimer.current) clearTimeout(returnTimer.current);
       stopSpeaking();
     },
     [],
@@ -202,10 +237,11 @@ export function VoiceScreen({
     const token = ++generation.current;
     session.current?.stop();
     if (!keepPhase && !fromSaved) {
+      wipe();
+      setBlocked(null);
       phaseRef.current = 'listening';
       setPhase('listening');
       setPartial('');
-      setBlocked(null);
       clearTimers();
     }
     const next = await startSpeech(
@@ -352,6 +388,7 @@ export function VoiceScreen({
   async function presentDraft(next: Draft, ambiguous?: boolean) {
     const current = dataRef.current;
     if (!current) return;
+    wipe();
     applyDraft(next);
     const person = current.children.find((child) => child.id === next.childId)?.name ?? '';
     const when = speakWhen(next.date, next.time, dateFieldValue(new Date()));
@@ -500,11 +537,24 @@ export function VoiceScreen({
       return;
     }
     applyDraft(null);
-    setNotice(result.summary);
-    phaseRef.current = support === 'none' ? 'typing' : 'listening';
-    setPhase(phaseRef.current);
-    await speakGerman(result.summary);
-    if (support !== 'none') void beginListen();
+    wipe();
+    setHeard(raw.trim());
+    phaseRef.current = 'unknown';
+    setPhase('unknown');
+    const line = raw.trim()
+      ? `Ich habe „${raw.trim()}“ gehört, aber keinen Eintrag erkannt.`
+      : 'Ich habe nichts erkannt.';
+    await speakGerman(line);
+    if (phaseRef.current !== 'unknown' || previewRef.current) return;
+    armReturn(2800, () => {
+      if (phaseRef.current !== 'unknown') return;
+      if (support === 'none') {
+        phaseRef.current = 'unavailable';
+        setPhase('unavailable');
+        return;
+      }
+      void beginListen();
+    });
   }
 
   async function onHeard(heard: string) {
@@ -706,16 +756,27 @@ export function VoiceScreen({
     }
     undoRef.current = undo;
     setHasUndo(true);
+    const line = confirmationLine(next, current);
     applyDraft(null);
     setPendingDose(null);
-    setError(null);
+    wipe();
+    setSavedLine(line);
     phaseRef.current = 'saved';
     setPhase('saved');
-    setSpoken('Gespeichert.');
     saving.current = false;
     await playCue('saved');
-    await speakGerman('Gespeichert.');
-    if (phaseRef.current === 'saved' && support !== 'none') void beginListen();
+    void speakGerman('Gespeichert.');
+    if (previewRef.current) return;
+    armReturn(3500, () => {
+      if (phaseRef.current !== 'saved') return;
+      stopSpeaking();
+      if (support === 'none') {
+        phaseRef.current = 'unavailable';
+        setPhase('unavailable');
+        return;
+      }
+      void beginListen();
+    });
   }
 
   const commitRef = useRef(commit);
@@ -755,14 +816,15 @@ export function VoiceScreen({
     stopMic();
     applyDraft(null);
     setPendingDose(null);
-    setError(null);
+    wipe();
     setBlocked(null);
-    phaseRef.current = support === 'none' ? 'typing' : 'listening';
-    setPhase(phaseRef.current);
-    setSpoken('Nicht gespeichert.');
     await playCue('cancel');
     await speakGerman('Nicht gespeichert.');
     if (support !== 'none') void beginListen();
+    else {
+      phaseRef.current = 'unavailable';
+      setPhase('unavailable');
+    }
   }
 
   function leave() {
@@ -776,12 +838,26 @@ export function VoiceScreen({
     clearTimers();
     stopMic();
     stopSpeaking();
+    wipe();
     phaseRef.current = 'typing';
     setPhase('typing');
   }
 
   useEffect(() => {
+    if (phase !== 'listening') return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 0, duration: 900, useNativeDriver: false }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [phase, pulse]);
+
+  useEffect(() => {
     if (!preview || !data) return;
+    wipe();
     if (preview === 'listening') {
       phaseRef.current = 'listening';
       setPhase('listening');
@@ -789,29 +865,45 @@ export function VoiceScreen({
       setListening(true);
       return;
     }
+    if (preview === 'saved') {
+      phaseRef.current = 'saved';
+      setPhase('saved');
+      setSavedLine('Eingetragen: 15.11.2026, 21:42 Uhr, 38,5 °C');
+      return;
+    }
+    if (preview === 'unknown') {
+      phaseRef.current = 'unknown';
+      setPhase('unknown');
+      setHeard('hm irgendwas');
+      return;
+    }
+    if (preview === 'unavailable') {
+      phaseRef.current = 'unavailable';
+      setPhase('unavailable');
+      return;
+    }
     const next: Draft = {
       kind: 'temperature',
       childId: data.children.find((child) => child.name === 'Anna')?.id ?? data.children[0]?.id ?? '',
       celsius: '38,5',
       method: 'rektal',
-      date: dateFieldValue(new Date()),
-      time: '01:52',
+      date: '15.11.2026',
+      time: '21:42',
     };
     applyDraft(next);
     phaseRef.current = 'confirm';
     setPhase('confirm');
     setCountdown(3);
     countdownRef.current = 3;
-    setSpoken('Anna, 38,5 Grad rektal, 1:52 Uhr. Speichern?');
   }, [preview, data]);
 
   useEffect(() => {
     if (preview || started.current) return;
     started.current = true;
     if (support === 'none') {
-      setNotice(
-        'In Expo Go hört das Mikrofon nicht mit. Tipp den Satz unten ein. Dieselbe Vorlese-Bestätigung läuft dort trotzdem. Zuhören ohne Tippen braucht die installierte APK.',
-      );
+      wipe();
+      phaseRef.current = 'unavailable';
+      setPhase('unavailable');
       return;
     }
     if (autoStart) void beginListen();
@@ -821,16 +913,27 @@ export function VoiceScreen({
 
   const current = data;
   const personName = current?.children.find((child) => child.id === draft?.childId)?.name ?? (preview === 'confirm' ? 'Anna' : '');
-  const detail = draft && current ? detailFor(draft, current) : preview === 'confirm' ? '38,5 Grad rektal' : '';
-  const when = draft ? speakWhen(draft.date, draft.time, dateFieldValue(new Date())) : preview === 'confirm' ? '1:52 Uhr' : '';
+  const activeName = activeChild?.name ?? personName;
+  const ring = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
+  const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] });
 
   return (
     <Screen
       title="Spracheingabe"
       onBack={leave}
+      right={
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Hilfe zur Spracheingabe"
+          onPress={() => setHelpOpen(true)}
+          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#2F6FED', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <MaterialCommunityIcons name="cog" size={22} color="#FFFFFF" />
+        </Pressable>
+      }
       dialog={
         <ConfirmDialog
-          visible={pendingDose !== null && phase === 'typing'}
+          visible={pendingDose !== null && (phase === 'typing' || phase === 'unavailable')}
           title="Grenze überschritten"
           message={`${error ?? ''} Trotzdem speichern?`}
           confirmLabel="Trotzdem speichern"
@@ -839,54 +942,42 @@ export function VoiceScreen({
         />
       }
     >
-      {phase === 'listening' || phase === 'saved' ? (
-        <View style={{ alignItems: 'center', gap: 18, paddingTop: 28 }}>
-          <View
-            style={{
-              width: 168,
-              height: 168,
-              borderRadius: 84,
-              backgroundColor: theme.accentSoft,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <MicIcon color={theme.accent} size={72} />
+      {phase === 'listening' ? (
+        <View style={{ alignItems: 'center', gap: 16, paddingTop: 36 }}>
+          <View style={{ width: 188, height: 188, alignItems: 'center', justifyContent: 'center' }}>
+            <Animated.View
+              style={{
+                position: 'absolute',
+                width: 168,
+                height: 168,
+                borderRadius: 84,
+                borderWidth: 3,
+                borderColor: theme.accent,
+                opacity: ringOpacity,
+                transform: [{ scale: ring }],
+              }}
+            />
+            <View style={{ width: 148, height: 148, borderRadius: 74, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
+              <MicIcon color={theme.accent} size={64} />
+            </View>
           </View>
-          <Text accessibilityLiveRegion="polite" style={{ color: theme.text, fontSize: 32, fontWeight: '800', textAlign: 'center' }}>
-            {phase === 'saved' ? 'Gespeichert' : listening ? 'Ich höre zu' : 'Einen Moment'}
-          </Text>
-          <Text style={{ color: theme.text, fontSize: 28, fontWeight: '700', textAlign: 'center', minHeight: 36 }}>{partial}</Text>
-          {spoken ? (
-            <Text style={{ color: theme.accent, fontSize: 22, fontWeight: '800', textAlign: 'center' }}>{spoken}</Text>
-          ) : null}
-          <Muted>{phase === 'saved' ? 'Sag Rückgängig oder den nächsten Wert.' : 'Zum Beispiel: Anna 38,5'}</Muted>
-          {notice ? <Banner tone="info">{notice}</Banner> : null}
-          {support === 'none' ? null : (
-            <Muted>Die Erkennung nutzt die Spracherkennung des Geräts. Gespeichert wird erst nach der Ansage.</Muted>
-          )}
-          {hasUndo ? <Button label="Rückgängig" variant="secondary" onPress={() => void undo()} /> : null}
-          <Button label="Tippen" variant="secondary" onPress={correct} />
+          <Text accessibilityLiveRegion="polite" style={{ color: theme.text, fontSize: 28, fontWeight: '800' }}>Ich höre zu …</Text>
+          <Text style={{ color: theme.muted, fontSize: 18, minHeight: 26, textAlign: 'center' }}>{partial}</Text>
+          {activeName ? <Text style={{ color: theme.muted, fontSize: 13 }}>für {activeName}</Text> : null}
         </View>
       ) : null}
 
       {phase === 'confirm' || phase === 'clarify' ? (
-        <View style={{ alignItems: 'center', gap: 10, paddingTop: 24 }}>
-          <Text accessibilityLiveRegion="polite" style={{ color: theme.text, fontSize: 40, fontWeight: '800', textAlign: 'center' }}>
-            {personName || 'Eintrag'}
-          </Text>
-          <Text style={{ color: theme.text, fontSize: 28, fontWeight: '700', textAlign: 'center' }}>{detail}</Text>
-          <Text style={{ color: theme.muted, fontSize: 22, textAlign: 'center' }}>{when}</Text>
-          <Text style={{ color: theme.accent, fontSize: 28, fontWeight: '800', marginTop: 12 }}>
-            {blocked === 'person' ? 'Welche Person?' : blocked === 'limit' ? 'Grenze erreicht' : 'Speichern?'}
-          </Text>
-          {countdown !== null ? (
-            <Text style={{ color: theme.text, fontSize: 64, fontWeight: '800' }}>{countdown}</Text>
-          ) : (
-            <Text style={{ color: theme.muted, fontSize: 18, textAlign: 'center' }}>{spoken}</Text>
-          )}
+        <View style={{ gap: 14, paddingTop: 12 }}>
+          <Card>
+            <Text accessibilityLiveRegion="polite" style={{ color: theme.text, fontSize: 22, lineHeight: 30, fontWeight: '800' }}>
+              {draft && current ? confirmCard(draft, personName, current) : 'Anna · 38,5 °C rektal · 21:42'}
+            </Text>
+          </Card>
+          {blocked === 'limit' && error ? <Banner tone="warning">{error}</Banner> : null}
           {blocked === 'person' && current ? (
-            <View style={{ alignSelf: 'stretch', gap: 8 }}>
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>Welche Person?</Text>
               {current.children.map((child) => (
                 <Button
                   key={child.id}
@@ -900,112 +991,100 @@ export function VoiceScreen({
                 />
               ))}
             </View>
-          ) : null}
-          <View style={{ alignSelf: 'stretch', gap: 8, marginTop: 8 }}>
-            {blocked !== 'person' ? (
-              <Button label={blocked === 'limit' ? 'Trotzdem speichern' : 'Speichern'} onPress={() => void commit(blocked === 'limit')} />
-            ) : null}
-            <Button label="Abbrechen" variant="secondary" onPress={() => void discard()} />
-            {hasUndo ? <Button label="Rückgängig" variant="secondary" onPress={() => void undo()} /> : null}
-            <Button label="Korrigieren" variant="ghost" onPress={correct} />
-          </View>
-          <Muted>Sag ja, speichern, nein, abbrechen oder rückgängig.</Muted>
+          ) : (
+            <>
+              <View style={{ height: 8, borderRadius: 4, backgroundColor: theme.border, overflow: 'hidden' }}>
+                <View style={{ height: 8, width: `${((countdown ?? 3) / 3) * 100}%`, backgroundColor: theme.accent }} />
+              </View>
+              <Text style={{ color: theme.muted, textAlign: 'center' }}>{countdown ?? 3}</Text>
+              <Button label="Speichern" onPress={() => void commit(blocked === 'limit')} />
+              <Button label="Verwerfen" variant="secondary" onPress={() => void discard()} />
+            </>
+          )}
+        </View>
+      ) : null}
+
+      {phase === 'saved' ? (
+        <View style={{ alignItems: 'center', gap: 16, paddingTop: 48 }}>
+          <MaterialCommunityIcons name="check-circle" size={72} color={theme.ok} />
+          <Text accessibilityLiveRegion="polite" style={{ color: theme.text, fontSize: 20, lineHeight: 28, fontWeight: '700', textAlign: 'center' }}>
+            {savedLine || 'Eingetragen.'}
+          </Text>
+          <Button label="Rückgängig" variant="secondary" onPress={() => void undo()} />
+        </View>
+      ) : null}
+
+      {phase === 'unknown' ? (
+        <View style={{ gap: 12, paddingTop: 28 }}>
+          <Banner tone="warning">
+            {heard ? `Ich habe „${heard}“ gehört, aber keinen Eintrag erkannt.` : 'Ich habe nichts erkannt.'}
+          </Banner>
+          <Muted>z. B. „Anna 38,5“</Muted>
+        </View>
+      ) : null}
+
+      {phase === 'unavailable' ? (
+        <View style={{ gap: 12 }}>
+          <Banner tone="info">
+            Das Mikrofon ist hier nicht verfügbar. In Expo Go tippst du den Satz. Zuhören ohne Tippen braucht die installierte App.
+          </Banner>
+          <TextField label="Satz" value={text} onChangeText={setText} placeholder="Anna 38,5" multiline />
+          <Button label="Auswerten" onPress={() => void interpret()} />
         </View>
       ) : null}
 
       {phase === 'typing' ? (
-        <>
-          {spoken ? (
-            <Text accessibilityLiveRegion="polite" style={{ color: theme.accent, fontSize: 22, fontWeight: '800' }}>
-              {spoken}
-            </Text>
-          ) : null}
-          {support === 'none' ? (
-            <Banner>
-              In Expo Go und im Browser ohne Mikrofon tippst du den Satz. Vorlesen, drei Sekunden und die Befehle laufen in der installierten APK
-              ohne Tippen. Hier kannst du Speichern und Abbrechen antippen.
-            </Banner>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Mikrofon starten"
-              onPress={() => void beginListen()}
-              style={{
-                minHeight: 96,
-                borderRadius: 24,
-                backgroundColor: theme.accent,
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'row',
-                gap: 12,
-              }}
-            >
-              <MicIcon color={theme.onAccent} />
-              <Text style={{ color: theme.onAccent, fontSize: 20, fontWeight: '800' }}>Mikrofon</Text>
-            </Pressable>
-          )}
-          {notice ? <Banner tone="info">{notice}</Banner> : null}
-          {error ? <Banner tone="danger">{error}</Banner> : null}
+        <View style={{ gap: 12 }}>
           <TextField label="Satz" value={text} onChangeText={setText} placeholder="Anna 38,5" multiline />
           <Button label="Auswerten" onPress={() => void interpret()} />
-          <Muted>Beispiele: „Anna 38,5“, „vor 15 Minuten 37,3 Grad“, „Ibuprofen gegeben“, „Gewicht 9,6 Kilo“.</Muted>
+          {support !== 'none' ? (
+            <Pressable accessibilityRole="button" onPress={() => void beginListen()}>
+              <Text style={{ color: theme.accent, fontSize: 15, textAlign: 'center' }}>Wieder zuhören</Text>
+            </Pressable>
+          ) : null}
           {summary && draft && current ? (
             <Card>
-              <Body>Das wird gespeichert</Body>
-              <Muted>{summary}</Muted>
-              {current.children.length > 1 || !draft.childId ? (
-                <Segmented
-                  label="Person"
-                  value={draft.childId}
-                  options={current.children.map((child) => ({ value: child.id, label: child.name }))}
-                  onChange={(childId) => {
-                    const person = current.children.find((item) => item.id === childId);
-                    applyDraft({
-                      ...draft,
-                      childId,
-                      ...(draft.kind === 'temperature' && person ? { method: person.defaultMethod } : {}),
-                    });
-                  }}
-                />
-              ) : null}
-              {draft.kind === 'temperature' ? (
-                <>
-                  <TextField label="Temperatur °C" value={draft.celsius} onChangeText={(celsius) => applyDraft({ ...draft, celsius })} keyboard="decimal-pad" />
-                  <Segmented
-                    label="Messart"
-                    value={draft.method}
-                    options={MEASUREMENT_METHODS.map((method) => ({ value: method, label: METHOD_LABELS[method] }))}
-                    onChange={(method) => applyDraft({ ...draft, method })}
-                  />
-                </>
-              ) : null}
-              {draft.kind === 'dose' ? (
-                <>
-                  <TextField label="Dosis" value={draft.doseText} onChangeText={(doseText) => applyDraft({ ...draft, doseText })} />
-                  <TextField label="Gegeben von" value={draft.givenBy} onChangeText={(givenBy) => applyDraft({ ...draft, givenBy })} />
-                  {!draft.medicationId ? (
-                    <>
-                      <TextField label="Mindestabstand in Stunden" value={draft.interval} onChangeText={(interval) => applyDraft({ ...draft, interval })} keyboard="decimal-pad" />
-                      <TextField label="Höchstens Gaben in 24 Stunden" value={draft.max} onChangeText={(max) => applyDraft({ ...draft, max })} keyboard="number-pad" />
-                    </>
-                  ) : null}
-                </>
-              ) : null}
-              {draft.kind === 'growth' ? (
-                <>
-                  <TextField label="Gewicht kg" value={draft.weight} onChangeText={(weight) => applyDraft({ ...draft, weight })} keyboard="decimal-pad" />
-                  <TextField label="Größe cm" value={draft.height} onChangeText={(height) => applyDraft({ ...draft, height })} keyboard="decimal-pad" />
-                  <TextField label="Kopfumfang cm" value={draft.head} onChangeText={(head) => applyDraft({ ...draft, head })} keyboard="decimal-pad" />
-                </>
-              ) : null}
-              <DateTimeFields date={draft.date} time={draft.time} onChange={(date, time) => applyDraft({ ...draft, date, time })} />
-              <Button label="So speichern" onPress={() => void commit(false)} />
+              <Body>{confirmCard(draft, personName, current)}</Body>
+              <Button label="Speichern" onPress={() => void commit(false)} />
             </Card>
           ) : null}
-        </>
+        </View>
+      ) : null}
+
+      {phase === 'listening' || phase === 'confirm' || phase === 'clarify' ? (
+        <Pressable accessibilityRole="button" onPress={correct} style={{ marginTop: 28 }}>
+          <Text style={{ color: theme.muted, fontSize: 14, textAlign: 'center' }}>Stattdessen tippen</Text>
+        </Pressable>
+      ) : null}
+
+      {helpOpen ? (
+        <View style={{ marginTop: 16, borderRadius: 14, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card, padding: 14, gap: 8 }}>
+          <Text style={{ color: theme.text, fontWeight: '700' }}>Sprachbefehle</Text>
+          <Muted>ja oder speichern, nein oder verwerfen, trotzdem bei einer Grenze, rückgängig, beenden.</Muted>
+          <Button label="Schließen" variant="secondary" onPress={() => setHelpOpen(false)} />
+        </View>
       ) : null}
     </Screen>
   );
+}
+
+
+function confirmCard(draft: Draft, person: string, data: AppData): string {
+  const who = person || 'Eintrag';
+  if (draft.kind === 'temperature') return `${who} · ${draft.celsius} °C ${METHOD_LABELS[draft.method]} · ${draft.time}`;
+  if (draft.kind === 'symptom') return `${who} · ${draft.label} · ${draft.time}`;
+  if (draft.kind === 'growth') return `${who} · ${detailFor(draft, data)} · ${draft.time}`;
+  const medication = data.medications.find((item) => item.id === draft.medicationId);
+  return `${who} · ${medication?.name ?? draft.query} ${draft.doseText} · ${draft.time}`.replace(/\s+/g, ' ');
+}
+
+function confirmationLine(draft: Draft, data: AppData): string {
+  const clock = `${draft.date}, ${draft.time} Uhr`;
+  if (draft.kind === 'temperature') return `Eingetragen: ${clock}, ${draft.celsius} °C`;
+  if (draft.kind === 'symptom') return `Eingetragen: ${clock}, ${draft.label}`;
+  if (draft.kind === 'growth') return `Eingetragen: ${clock}, ${detailFor(draft, data)}`;
+  const medication = data.medications.find((item) => item.id === draft.medicationId);
+  return `Eingetragen: ${clock}, ${medication?.name ?? draft.query} ${draft.doseText}`.replace(/\s+/g, ' ');
 }
 
 function spokenLine(person: string, detail: string, reason: string): string {
