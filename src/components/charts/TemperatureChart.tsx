@@ -1,0 +1,471 @@
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Modal, PanResponder, Pressable, Text, useWindowDimensions, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { endOfBerlinDay, formatDate, formatShortDay, formatTime, shiftBerlinDays, startOfBerlinDay } from '../../domain/dates';
+import { formatDecimal } from '../../domain/format';
+import { REFERENCE_LINES } from '../../domain/fever';
+import { symptomIconName } from '../../domain/symptomIcons';
+import { symptomLabel } from '../../domain/symptoms';
+import type { CustomSymptom, DoseEntry, Medication, SymptomEntry, TemperatureEntry } from '../../domain/types';
+import { useTheme } from '../../theme/ThemeProvider';
+import { SymptomGlyph } from '../SymptomGlyph';
+import { ChartFrame } from './ChartFrame';
+import { doseMarkerPaint, shortMedicationName, symptomMarkColor, temperatureOnCurve } from './doseMarks';
+
+const TEMP_RED = '#FF5C6C';
+const DAY_MS = 86_400_000;
+const RANGES = [2, 5, 7, 14];
+
+export function TemperatureChart(props: {
+  entries: TemperatureEntry[];
+  doses: DoseEntry[];
+  medications: Medication[];
+  symptoms?: SymptomEntry[];
+  customSymptoms?: CustomSymptom[];
+  selectedId?: string | null;
+  onSelectId?: (id: string) => void;
+  now: Date;
+  days: number;
+  onDays: (days: number) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const view = <TemperatureChartView {...props} expanded={expanded} onToggleExpand={() => setExpanded((value) => !value)} />;
+  if (!expanded) return view;
+  return (
+    <Modal visible animationType="fade" supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} onRequestClose={() => setExpanded(false)}>
+      <LandscapeStage>{view}</LandscapeStage>
+    </Modal>
+  );
+}
+
+function TemperatureChartView({
+  entries,
+  doses,
+  medications,
+  symptoms = [],
+  customSymptoms = [],
+  selectedId = null,
+  onSelectId,
+  now,
+  days,
+  onDays,
+  expanded = false,
+  onToggleExpand,
+}: {
+  entries: TemperatureEntry[];
+  doses: DoseEntry[];
+  medications: Medication[];
+  symptoms?: SymptomEntry[];
+  customSymptoms?: CustomSymptom[];
+  selectedId?: string | null;
+  onSelectId?: (id: string) => void;
+  now: Date;
+  days: number;
+  onDays: (days: number) => void;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
+}) {
+  const theme = useTheme();
+  const [plotHeight, setPlotHeight] = useState(292);
+  const [showSymptoms, setShowSymptoms] = useState(true);
+  const [gearOpen, setGearOpen] = useState(false);
+  const [hiddenMeds, setHiddenMeds] = useState<string[]>(() =>
+    medications.filter((med) => /husten|prospan/i.test(med.name)).map((med) => med.id),
+  );
+  const latest = useMemo(
+    () => [...entries].sort((a, b) => a.timestamp.localeCompare(b.timestamp)).at(-1) ?? null,
+    [entries],
+  );
+  const latestDay = latest ? startOfBerlinDay(new Date(latest.timestamp)) : startOfBerlinDay(now);
+  const [endDay, setEndDay] = useState(latestDay);
+  const [shiftMs, setShiftMs] = useState(0);
+  const widthRef = useRef(320);
+  const endRef = useRef(endDay);
+  endRef.current = endDay;
+  const daysRef = useRef(days);
+  daysRef.current = days;
+  const capRef = useRef(0);
+
+  useEffect(() => {
+    setEndDay(latestDay);
+    setShiftMs(0);
+  }, [latest?.id]);
+
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_, gesture) => Math.abs(gesture.dx) > 12 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+    onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 12 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+      onPanResponderMove: (_, gesture) => {
+        const span = daysRef.current * DAY_MS;
+        setShiftMs((gesture.dx / Math.max(widthRef.current, 1)) * span);
+      },
+      onPanResponderRelease: (_, gesture) => {
+        const span = daysRef.current * DAY_MS;
+        const ms = (gesture.dx / Math.max(widthRef.current, 1)) * span;
+        const next = endOfBerlinDay(endRef.current).getTime() + ms;
+        const capped = Math.min(next, capRef.current);
+        setEndDay(startOfBerlinDay(new Date(capped)));
+        setShiftMs(0);
+      },
+    }),
+  ).current;
+
+  const cap = Math.max(endOfBerlinDay(now).getTime(), endOfBerlinDay(latestDay).getTime());
+  capRef.current = cap;
+  const end = new Date(Math.min(endOfBerlinDay(endDay).getTime() + shiftMs, cap));
+  const start = new Date(end.getTime() - days * DAY_MS);
+  const from = start.getTime();
+  const to = end.getTime();
+  const shown = entries
+    .filter((entry) => {
+      const time = new Date(entry.timestamp).getTime();
+      return time >= from && time <= to;
+    })
+    .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  const ys = shown.map((entry) => entry.celsius);
+  const yMin = Math.min(36, ...ys, 37.6) - 0.3;
+  const yMax = Math.max(41, ...ys, 40) + 0.25;
+  const verticals: { x: number; strong: boolean; label?: string; labelAxis?: 'horizontal' | 'vertical'; labelDy?: number }[] = [];
+  const labels: { x: number; label: string }[] = [];
+  let cursor = startOfBerlinDay(start);
+  let dayIndex = 0;
+  while (cursor.getTime() < to + DAY_MS && dayIndex < days + 2) {
+    const dayStart = cursor.getTime();
+    if (dayStart + DAY_MS > from && dayStart < to) {
+      verticals.push({ x: dayStart, strong: true });
+      const noon = dayStart + 12 * 3_600_000;
+      const margin = (to - from) * 0.08;
+      const showDay = days < 14 ? noon > from + margin && noon < to - margin : dayIndex % 4 === 0;
+      if (showDay && noon > from && noon < to) {
+        const stamp = new Date(noon);
+        const text = days >= 7 ? formatDate(stamp).slice(0, 6) : formatShortDay(stamp);
+        labels.push({ x: noon, label: text });
+      }
+      if (days < 14) {
+        const rotated = days >= 5;
+        const hours = days >= 7 ? [12] : [6, 12, 18];
+        for (const hour of hours) {
+          const x = dayStart + hour * 3_600_000;
+          if (x <= from || x >= to) continue;
+          const showLabel = rotated || (x > from + margin && x < to - margin);
+          const labelDy = rotated && days < 7 ? (hour === 6 ? -28 : hour === 12 ? -14 : 0) : 0;
+          verticals.push({
+            x,
+            strong: false,
+            label: showLabel ? `${hour}h` : undefined,
+            labelAxis: rotated ? 'vertical' : 'horizontal',
+            labelDy,
+          });
+        }
+      }
+      dayIndex += 1;
+    }
+    cursor = startOfBerlinDay(shiftBerlinDays(cursor, 1));
+  }
+  const yTicks = [36, 37, 38, 39, 40, 41]
+    .filter((value) => value > yMin + 0.15 && value < yMax - 0.15)
+    .map((value) => ({ y: value, label: formatDecimal(value, 0) }));
+  const medIndex = new Map(medications.map((med, index) => [med.id, index]));
+  const visibleMeds = medications.filter((med) => !hiddenMeds.includes(med.id));
+  const symptomY = yMin + (yMax - yMin) * (days === 5 ? 0.2 : 0.08);
+  const markers = doses.filter((dose) => {
+    const time = new Date(dose.timestamp).getTime();
+    return time >= from && time <= to && visibleMeds.some((med) => med.id === dose.medicationId);
+  });
+  const symptomMarks = showSymptoms
+    ? symptoms.filter((item) => {
+        const time = new Date(item.timestamp).getTime();
+        return time >= from && time <= to;
+      })
+    : [];
+  const symptomColor = symptomMarkColor(theme.dark);
+  const legendSymptoms: { key: string; label: string; icon: string | null }[] = [];
+  const seenSymptoms = new Set<string>();
+  for (const item of symptomMarks) {
+    const key = item.symptomId || item.label;
+    if (seenSymptoms.has(key)) continue;
+    seenSymptoms.add(key);
+    legendSymptoms.push({
+      key,
+      label: item.label || (item.symptomId ? symptomLabel(item.symptomId) : 'Symptom'),
+      icon: symptomMarks.length <= 8 ? symptomIconName(item.symptomId, customSymptoms) : null,
+    });
+  }
+  const legendMeds = visibleMeds.filter((med) => doses.some((dose) => dose.medicationId === med.id));
+  const latestLabel = latest ? formatDate(new Date(latest.timestamp)).slice(0, 6) : '';
+
+  return (
+    <View style={{ gap: 8, flex: expanded ? 1 : undefined, padding: expanded ? 12 : 0, backgroundColor: expanded ? theme.bg : undefined }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        {RANGES.map((range) => {
+          const selected = range === days;
+          return (
+            <Pressable
+              key={range}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              onPress={() => onDays(range)}
+              style={{
+                minHeight: 36,
+                paddingHorizontal: 8,
+                borderRadius: 8,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: selected ? theme.accent : 'transparent',
+                borderWidth: 1,
+                borderColor: selected ? theme.accent : theme.border,
+              }}
+            >
+              <Text style={{ color: selected ? theme.onAccent : theme.text, fontSize: 13, fontWeight: '700' }}>{range} Tage</Text>
+            </Pressable>
+          );
+        })}
+        <View style={{ flex: 1 }} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={expanded ? 'Diagramm verkleinern' : 'Diagramm vergrößern'}
+          onPress={onToggleExpand}
+          style={{ width: 44, height: 36, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <MaterialCommunityIcons name={expanded ? 'arrow-collapse' : 'arrow-expand'} size={22} color={theme.text} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Diagramm einstellen"
+          onPress={() => setGearOpen((open) => !open)}
+          style={{ width: 44, height: 36, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Text style={{ color: theme.text, fontSize: 18 }}>⚙</Text>
+        </Pressable>
+      </View>
+      {latest ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={`Letzte Messung ${latestLabel}`} onPress={() => { setEndDay(latestDay); setShiftMs(0); }}>
+          <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '700' }}>Letzte Messung: {latestLabel}</Text>
+        </Pressable>
+      ) : null}
+      <View style={{ flex: expanded ? 1 : undefined }} onLayout={(event) => { widthRef.current = event.nativeEvent.layout.width; if (expanded) setPlotHeight(Math.max(160, event.nativeEvent.layout.height)); }}>
+        <ChartFrame
+          height={expanded ? plotHeight : 292}
+          panHandlers={pan.panHandlers}
+          xDomain={[from, to]}
+          yDomain={[yMin, yMax]}
+          yTicks={yTicks}
+          xLabels={labels}
+          verticals={verticals}
+          horizontals={REFERENCE_LINES.map((line) => ({
+            y: line.celsius,
+            color: theme.dark ? 'rgba(186,194,204,0.40)' : 'rgba(90,98,110,0.35)',
+            dashed: true,
+            label: '',
+          }))}
+          yUnit="°C"
+          selectedId={selectedId}
+          onSelectId={onSelectId}
+          series={[
+            {
+              points: curveThroughWindow(entries, from, to),
+              color: TEMP_RED,
+              width: 1.8,
+            },
+          ]}
+          points={[
+            ...symptomMarks.map((item) => {
+              const icon = symptomMarks.length <= 8 ? symptomIconName(item.symptomId, customSymptoms) : null;
+              return {
+                x: new Date(item.timestamp).getTime(),
+                y: symptomY,
+                label: '',
+                fill: symptomColor,
+                r: 2.5,
+                opacity: icon ? 1 : 0.55,
+                hit: false as const,
+                icon: icon ?? undefined,
+              };
+            }),
+            ...shown.map((entry) => ({
+              id: entry.id,
+              x: new Date(entry.timestamp).getTime(),
+              y: entry.celsius,
+              label: `${formatShortDay(new Date(entry.timestamp))} ${formatTime(new Date(entry.timestamp))} · ${formatDecimal(entry.celsius, 1)} °C`,
+              fill: TEMP_RED,
+              r: 3,
+            })),
+            ...markers.flatMap((dose) => {
+              const at = new Date(dose.timestamp).getTime();
+              const y = temperatureOnCurve(entries, at);
+              const medication = medications.find((item) => item.id === dose.medicationId);
+              if (y === null || !medication) return [];
+              const paint = doseMarkerPaint(medIndex.get(dose.medicationId) ?? 0);
+              const when = new Date(dose.timestamp);
+              return [{
+                id: `dose:${dose.id}`,
+                x: at,
+                y,
+                label: `${shortMedicationName(medication.name)} ${dose.doseText} · ${formatShortDay(when)} ${formatTime(when)}`,
+                fill: paint.fill,
+                opacity: paint.opacity,
+                r: paint.r,
+                stroke: paint.stroke,
+                strokeWidth: paint.strokeWidth,
+              }];
+            }),
+          ]}
+        />
+      </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 10, rowGap: 4 }}>
+          <LegendChip
+            label="Temperatur"
+            color={theme.text}
+            mark={<View style={{ width: 14, height: 2, borderRadius: 1, backgroundColor: TEMP_RED }} />}
+          />
+          {legendMeds.map((med) => {
+            const paint = doseMarkerPaint(medIndex.get(med.id) ?? 0);
+            return (
+              <LegendChip
+                key={med.id}
+                label={shortMedicationName(med.name)}
+                color={theme.text}
+                mark={<DoseSwatch paint={paint} />}
+              />
+            );
+          })}
+          {legendSymptoms.map((item) => (
+            <LegendChip
+              key={item.key}
+              label={item.label}
+              color={theme.text}
+              mark={
+                item.icon ? (
+                  <SymptomGlyph name={item.icon} color={symptomColor} size={12} />
+                ) : (
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: symptomColor, opacity: 0.55 }} />
+                )
+              }
+            />
+          ))}
+        </View>
+      {gearOpen ? (
+        <View style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 12, gap: 8, backgroundColor: theme.card }}>
+          <Text style={{ color: theme.text, fontWeight: '700' }}>Im Diagramm</Text>
+          {medications.map((med) => {
+            const on = !hiddenMeds.includes(med.id);
+            return (
+              <Text
+                key={med.id}
+                onPress={() => setHiddenMeds(on ? [...hiddenMeds, med.id] : hiddenMeds.filter((id) => id !== med.id))}
+                style={{ color: theme.text, fontSize: 15, lineHeight: 22, paddingVertical: 4 }}
+              >
+                {on ? '☑' : '☐'} {med.name}
+              </Text>
+            );
+          })}
+          <Text onPress={() => setShowSymptoms(!showSymptoms)} style={{ color: theme.text, fontSize: 15, lineHeight: 22, paddingVertical: 4 }}>
+            {showSymptoms ? '☑' : '☐'} Symptome
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** Points inside the window, plus the nearest sample on each side, so the stroke reaches the plot edge. */
+function curveThroughWindow(entries: TemperatureEntry[], from: number, to: number): { x: number; y: number }[] {
+  const sorted = [...entries].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  const timeOf = (entry: TemperatureEntry) => new Date(entry.timestamp).getTime();
+  const pointOf = (entry: TemperatureEntry) => ({ x: timeOf(entry), y: entry.celsius });
+  const first = sorted.findIndex((entry) => {
+    const time = timeOf(entry);
+    return time >= from && time <= to;
+  });
+  if (first === -1) {
+    const before = [...sorted].reverse().find((entry) => timeOf(entry) < from);
+    const after = sorted.find((entry) => timeOf(entry) > to);
+    return [before, after].filter((entry): entry is TemperatureEntry => Boolean(entry)).map(pointOf);
+  }
+  let last = first;
+  for (let index = sorted.length - 1; index >= first; index -= 1) {
+    const time = timeOf(sorted[index]);
+    if (time >= from && time <= to) {
+      last = index;
+      break;
+    }
+  }
+  return sorted.slice(Math.max(0, first - 1), last + 2).map(pointOf);
+}
+
+function LegendChip({ mark, label, color }: { mark: ReactNode; label: string; color: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: 128 }}>
+      {mark}
+      <Text style={{ flexShrink: 1, color, fontSize: 10, lineHeight: 13 }} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function DoseSwatch({ paint }: { paint: { fill: string; opacity: number; r: number; stroke: string; strokeWidth: number } }) {
+  const box = (paint.r + paint.strokeWidth) * 2;
+  return (
+    <Svg width={box} height={box}>
+      <Circle
+        cx={box / 2}
+        cy={box / 2}
+        r={paint.r}
+        fill={paint.fill}
+        opacity={paint.opacity}
+        stroke={paint.stroke}
+        strokeWidth={paint.strokeWidth}
+      />
+    </Svg>
+  );
+}
+
+function LandscapeStage({ children }: { children: ReactNode }) {
+  const { width, height } = useWindowDimensions();
+  const locked = useRef(false);
+  const [nativeLandscape, setNativeLandscape] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const orientation = require('expo-screen-orientation') as {
+          lockAsync: (lock: string) => Promise<void>;
+          OrientationLock: { LANDSCAPE: string; PORTRAIT_UP: string };
+        };
+        await orientation.lockAsync(orientation.OrientationLock.LANDSCAPE);
+        if (cancelled) {
+          await orientation.lockAsync(orientation.OrientationLock.PORTRAIT_UP);
+          return;
+        }
+        locked.current = true;
+        setNativeLandscape(true);
+      } catch {
+        if (!cancelled) setNativeLandscape(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (!locked.current) return;
+      try {
+        const orientation = require('expo-screen-orientation') as {
+          lockAsync: (lock: string) => Promise<void>;
+          OrientationLock: { PORTRAIT_UP: string };
+        };
+        void orientation.lockAsync(orientation.OrientationLock.PORTRAIT_UP);
+      } catch {
+        // The portrait lock of the app stays as it was.
+      }
+    };
+  }, []);
+  const themeBg = useTheme().bg;
+  if (nativeLandscape || width > height) {
+    return <View style={{ flex: 1, backgroundColor: themeBg }}>{children}</View>;
+  }
+  return (
+    <View style={{ flex: 1, backgroundColor: themeBg, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: height, height: width, transform: [{ rotate: '90deg' }] }}>{children}</View>
+    </View>
+  );
+}
