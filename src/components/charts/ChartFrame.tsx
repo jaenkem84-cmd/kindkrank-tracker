@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Pressable, Text, View, type GestureResponderHandlers } from 'react-native';
-import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, ClipPath, Defs, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { line } from 'd3-shape';
 import { SymptomGlyph } from '../SymptomGlyph';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -27,7 +27,7 @@ export type ChartSeries = {
 };
 
 type Tick = { x: number; label: string };
-type VLine = { x: number; strong: boolean; label?: string; labelAxis?: 'horizontal' | 'vertical' };
+type VLine = { x: number; strong: boolean; label?: string; labelAxis?: 'horizontal' | 'vertical'; labelSize?: number; labelDy?: number };
 type HLine = { y: number; color: string; dashed?: boolean; label?: string };
 
 export function ChartFrame({
@@ -47,6 +47,7 @@ export function ChartFrame({
   onSelectId,
   panHandlers,
   xLabelSize = 10,
+  padLeft = 44,
 }: {
   height?: number;
   xDomain: [number, number];
@@ -64,13 +65,15 @@ export function ChartFrame({
   onSelectId?: (id: string) => void;
   panHandlers?: GestureResponderHandlers;
   xLabelSize?: number;
+  padLeft?: number;
 }) {
   const theme = useTheme();
+  const clipId = `plot-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const [width, setWidth] = useState(360);
   const [pickedId, setPickedId] = useState<string | null>(null);
   const activeId = selectedId ?? pickedId;
   const selected = points.find((point) => point.id && point.id === activeId) ?? null;
-  const pad = { left: 44, right: endLabels.length > 0 ? 34 : 8, top: 16, bottom: 28 + markerLane };
+  const pad = { left: padLeft, right: endLabels.length > 0 ? 34 : 6, top: 16, bottom: 28 + markerLane };
   const innerW = Math.max(width - pad.left - pad.right, 1);
   const innerH = Math.max(height - pad.top - pad.bottom, 1);
   const [x0, x1] = xDomain;
@@ -107,6 +110,11 @@ export function ChartFrame({
   return (
     <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} {...panHandlers}>
       <Svg width={width} height={height}>
+        <Defs>
+          <ClipPath id={clipId}>
+            <Rect x={pad.left} y={pad.top} width={innerW} height={innerH} />
+          </ClipPath>
+        </Defs>
         {verticals.map((item, index) => (
           <Line
             key={`v-${index}`}
@@ -121,7 +129,7 @@ export function ChartFrame({
         {verticals.map((item, index) => {
           if (!item.label) return null;
           const x = xOf(item.x);
-          const y = pad.top + innerH - 3;
+          const y = pad.top + innerH - 4 + (item.labelDy ?? 0);
           if (item.labelAxis === 'vertical') {
             return (
               <SvgText
@@ -129,7 +137,7 @@ export function ChartFrame({
                 x={0}
                 y={0}
                 fill={theme.muted}
-                fontSize={8}
+                fontSize={item.labelSize ?? 8}
                 textAnchor="end"
                 transform={`translate(${x}, ${y}) rotate(-90)`}
               >
@@ -138,21 +146,11 @@ export function ChartFrame({
             );
           }
           return (
-            <SvgText key={`vh-${index}`} x={x} y={y} fill={theme.muted} fontSize={8} textAnchor="middle" opacity={0.8}>
+            <SvgText key={`vh-${index}`} x={x} y={y} fill={theme.muted} fontSize={item.labelSize ?? 8} textAnchor="middle" opacity={0.8}>
               {item.label}
             </SvgText>
           );
         })}
-        {selected ? (
-          <Line
-            x1={xOf(selected.x)}
-            x2={xOf(selected.x)}
-            y1={pad.top}
-            y2={pad.top + innerH}
-            stroke={theme.dark ? 'rgba(255,255,255,0.45)' : 'rgba(20,24,32,0.35)'}
-            strokeWidth={1}
-          />
-        ) : null}
         {yTicks.map((tick) => (
           <Line
             key={`y-${tick.label}`}
@@ -177,22 +175,24 @@ export function ChartFrame({
             opacity={0.7}
           />
         ))}
-        {series.map((item, index) => {
-          const d = pathOf(item.points);
-          if (!d) return null;
-          return (
-            <Path
-              key={`s-${index}`}
-              d={d}
-              fill="none"
-              stroke={item.color}
-              strokeWidth={item.width ?? 1.6}
-              opacity={item.opacity ?? 1}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          );
-        })}
+        <G clipPath={`url(#${clipId})`}>
+          {series.map((item, index) => {
+            const d = pathOf(item.points);
+            if (!d) return null;
+            return (
+              <Path
+                key={`s-${index}`}
+                d={d}
+                fill="none"
+                stroke={item.color}
+                strokeWidth={item.width ?? 1.6}
+                opacity={item.opacity ?? 1}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            );
+          })}
+        </G>
         {yUnit ? (
           <SvgText x={pad.left - 6} y={11} fill={theme.muted} fontSize={10} textAnchor="end">
             {yUnit}
@@ -227,23 +227,43 @@ export function ChartFrame({
             {tick.label}
           </SvgText>
         ))}
-        {points.map((point, index) => point.icon ? null : (
-          <Circle
-            key={point.id ?? `p-${index}`}
-            cx={xOf(point.x)}
-            cy={yOf(point.y)}
-            r={point.id && point.id === activeId ? 6 : (point.r ?? 3)}
-            fill={point.fill ?? theme.accent}
-            opacity={point.opacity ?? 1}
-            stroke={point.id && point.id === activeId ? '#FFFFFF' : theme.card}
-            strokeWidth={point.id && point.id === activeId ? 1.6 : 1}
-            onPress={() => {
-              if (!point.id || point.hit === false) return;
-              setPickedId(point.id);
-              onSelectId?.(point.id);
-            }}
-          />
-        ))}
+        {points.map((point, index) => {
+          if (point.icon) return null;
+          const chosen = Boolean(point.id && point.id === activeId);
+          const color = point.fill ?? theme.accent;
+          const radius = point.r ?? 3;
+          return (
+            <G key={point.id ?? `p-${index}`}>
+              {chosen ? (
+                <Circle cx={xOf(point.x)} cy={yOf(point.y)} r={radius + 8} fill={color} opacity={0.22} />
+              ) : null}
+              {chosen ? (
+                <Circle
+                  cx={xOf(point.x)}
+                  cy={yOf(point.y)}
+                  r={radius + 4.5}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={2.4}
+                />
+              ) : null}
+              <Circle
+                cx={xOf(point.x)}
+                cy={yOf(point.y)}
+                r={chosen ? radius + 1.5 : radius}
+                fill={color}
+                opacity={point.opacity ?? 1}
+                stroke={chosen ? color : theme.card}
+                strokeWidth={chosen ? 0 : 1}
+                onPress={() => {
+                  if (!point.id || point.hit === false) return;
+                  setPickedId(point.id);
+                  onSelectId?.(point.id);
+                }}
+              />
+            </G>
+          );
+        })}
         {points
           .filter((point) => point.icon)
           .map((point, index) => (

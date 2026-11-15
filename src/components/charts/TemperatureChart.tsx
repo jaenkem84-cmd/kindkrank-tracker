@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PanResponder, Pressable, Text, View } from 'react-native';
 import { endOfBerlinDay, formatDate, formatShortDay, formatTime, shiftBerlinDays, startOfBerlinDay } from '../../domain/dates';
 import { formatDecimal } from '../../domain/format';
 import { REFERENCE_LINES } from '../../domain/fever';
 import { symptomIconName } from '../../domain/symptomIcons';
+import { symptomLabel } from '../../domain/symptoms';
 import type { CustomSymptom, DoseEntry, Medication, SymptomEntry, TemperatureEntry } from '../../domain/types';
 import { useTheme } from '../../theme/ThemeProvider';
+import { SymptomGlyph } from '../SymptomGlyph';
 import { ChartFrame } from './ChartFrame';
 
 const MARKER_COLORS = ['#E7C27A', '#7EB6E0', '#D7A0AE', '#9BC7A4'];
@@ -95,7 +97,7 @@ export function TemperatureChart({
   const ys = shown.map((entry) => entry.celsius);
   const yMin = Math.min(36, ...ys, 37.6) - 0.3;
   const yMax = Math.max(41, ...ys, 40) + 0.25;
-  const verticals: { x: number; strong: boolean; label?: string; labelAxis?: 'horizontal' | 'vertical' }[] = [];
+  const verticals: { x: number; strong: boolean; label?: string; labelAxis?: 'horizontal' | 'vertical'; labelDy?: number }[] = [];
   const labels: { x: number; label: string }[] = [];
   let cursor = startOfBerlinDay(start);
   let dayIndex = 0;
@@ -112,17 +114,19 @@ export function TemperatureChart({
         labels.push({ x: noon, label: text });
       }
       if (days < 14) {
-        const upright = days >= 5;
-        const hours = upright ? (days >= 7 ? [12] : [6, 12, 18]) : [6, 12, 18];
+        const rotated = days >= 5;
+        const hours = days >= 7 ? [12] : [6, 12, 18];
         for (const hour of hours) {
           const x = dayStart + hour * 3_600_000;
           if (x <= from || x >= to) continue;
-          const showLabel = upright ? hour === 12 : x > from + margin && x < to - margin;
+          const showLabel = rotated || (x > from + margin && x < to - margin);
+          const labelDy = rotated && days < 7 ? (hour === 6 ? -28 : hour === 12 ? -14 : 0) : 0;
           verticals.push({
             x,
             strong: false,
             label: showLabel ? `${hour}h` : undefined,
-            labelAxis: upright ? 'vertical' : 'horizontal',
+            labelAxis: rotated ? 'vertical' : 'horizontal',
+            labelDy,
           });
         }
       }
@@ -135,7 +139,7 @@ export function TemperatureChart({
     .map((value) => ({ y: value, label: formatDecimal(value, 0) }));
   const medIndex = new Map(medications.map((med, index) => [med.id, index]));
   const visibleMeds = medications.filter((med) => !hiddenMeds.includes(med.id));
-  const markerY = yMin + (yMax - yMin) * 0.06;
+  const markerY = yMin + (yMax - yMin) * (days === 5 ? 0.16 : 0.06);
   const markers = doses.filter((dose) => {
     const time = new Date(dose.timestamp).getTime();
     return time >= from && time <= to && visibleMeds.some((med) => med.id === dose.medicationId);
@@ -146,10 +150,24 @@ export function TemperatureChart({
         return time >= from && time <= to;
       })
     : [];
+  const symptomColor = theme.dark ? '#E7C27A' : '#8A5A16';
+  const legendSymptoms: { key: string; label: string; icon: string | null }[] = [];
+  const seenSymptoms = new Set<string>();
+  for (const item of symptomMarks) {
+    const key = item.symptomId || item.label;
+    if (seenSymptoms.has(key)) continue;
+    seenSymptoms.add(key);
+    legendSymptoms.push({
+      key,
+      label: item.label || (item.symptomId ? symptomLabel(item.symptomId) : 'Symptom'),
+      icon: symptomMarks.length <= 8 ? symptomIconName(item.symptomId, customSymptoms) : null,
+    });
+  }
+  const legendMeds = visibleMeds.filter((med) => doses.some((dose) => dose.medicationId === med.id));
   const latestLabel = latest ? formatDate(new Date(latest.timestamp)).slice(0, 6) : '';
 
   return (
-    <View style={{ gap: 8 }} onLayout={(event) => { widthRef.current = event.nativeEvent.layout.width; }}>
+    <View style={{ gap: 8 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         {RANGES.map((range) => {
           const selected = range === days;
@@ -189,8 +207,10 @@ export function TemperatureChart({
           <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '700' }}>Letzte Messung: {latestLabel}</Text>
         </Pressable>
       ) : null}
-      <View>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginHorizontal: -8 }}>
+        <View style={{ flex: 1, minWidth: 0 }} onLayout={(event) => { widthRef.current = event.nativeEvent.layout.width; }}>
         <ChartFrame
+          padLeft={30}
           panHandlers={pan.panHandlers}
           xDomain={[from, to]}
           yDomain={[yMin, yMax]}
@@ -208,7 +228,7 @@ export function TemperatureChart({
           onSelectId={onSelectId}
           series={[
             {
-              points: shown.map((entry) => ({ x: new Date(entry.timestamp).getTime(), y: entry.celsius })),
+              points: curveThroughWindow(entries, from, to),
               color: TEMP_RED,
               width: 1.8,
             },
@@ -227,7 +247,7 @@ export function TemperatureChart({
               const icon = symptomMarks.length <= 8 ? symptomIconName(item.symptomId, customSymptoms) : null;
               return {
                 x: new Date(item.timestamp).getTime(),
-                y: markerY + (yMax - yMin) * 0.08,
+                y: markerY + (yMax - yMin) * (days === 5 ? 0.07 : 0.08),
                 label: '',
                 fill: theme.dark ? '#E7C27A' : '#8A5A16',
                 r: 2.5,
@@ -246,13 +266,46 @@ export function TemperatureChart({
             })),
           ]}
         />
+        </View>
+        <View style={{ width: 72, paddingTop: 18, gap: 5 }}>
+          <LegendRow
+            label="Temperatur"
+            color={theme.text}
+            mark={<View style={{ width: 14, height: 3, borderRadius: 2, backgroundColor: TEMP_RED }} />}
+          />
+          {legendMeds.map((med) => (
+            <LegendRow
+              key={med.id}
+              label={med.name.replace(' (Beispiel)', '')}
+              color={theme.text}
+              mark={
+                <View
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: MARKER_COLORS[(medIndex.get(med.id) ?? 0) % MARKER_COLORS.length],
+                  }}
+                />
+              }
+            />
+          ))}
+          {legendSymptoms.map((item) => (
+            <LegendRow
+              key={item.key}
+              label={item.label}
+              color={theme.text}
+              mark={
+                item.icon ? (
+                  <SymptomGlyph name={item.icon} color={symptomColor} size={12} />
+                ) : (
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: symptomColor }} />
+                )
+              }
+            />
+          ))}
+        </View>
       </View>
-      {visibleMeds.length > 0 || showSymptoms ? (
-        <Text style={{ color: theme.muted, fontSize: 11, lineHeight: 15 }} numberOfLines={2}>
-          {visibleMeds.map((med) => med.name.replace(' (Beispiel)', '')).join(' · ')}
-          {showSymptoms ? `${visibleMeds.length ? ' · ' : ''}Symptome` : ''}
-        </Text>
-      ) : null}
       {gearOpen ? (
         <View style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 12, gap: 8, backgroundColor: theme.card }}>
           <Text style={{ color: theme.text, fontWeight: '700' }}>Im Diagramm</Text>
@@ -273,6 +326,42 @@ export function TemperatureChart({
           </Text>
         </View>
       ) : null}
+    </View>
+  );
+}
+
+/** Points inside the window, plus the nearest sample on each side, so the stroke reaches the plot edge. */
+function curveThroughWindow(entries: TemperatureEntry[], from: number, to: number): { x: number; y: number }[] {
+  const sorted = [...entries].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  const timeOf = (entry: TemperatureEntry) => new Date(entry.timestamp).getTime();
+  const pointOf = (entry: TemperatureEntry) => ({ x: timeOf(entry), y: entry.celsius });
+  const first = sorted.findIndex((entry) => {
+    const time = timeOf(entry);
+    return time >= from && time <= to;
+  });
+  if (first === -1) {
+    const before = [...sorted].reverse().find((entry) => timeOf(entry) < from);
+    const after = sorted.find((entry) => timeOf(entry) > to);
+    return [before, after].filter((entry): entry is TemperatureEntry => Boolean(entry)).map(pointOf);
+  }
+  let last = first;
+  for (let index = sorted.length - 1; index >= first; index -= 1) {
+    const time = timeOf(sorted[index]);
+    if (time >= from && time <= to) {
+      last = index;
+      break;
+    }
+  }
+  return sorted.slice(Math.max(0, first - 1), last + 2).map(pointOf);
+}
+
+function LegendRow({ mark, label, color }: { mark: ReactNode; label: string; color: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      <View style={{ width: 14, height: 14, alignItems: 'center', justifyContent: 'center' }}>{mark}</View>
+      <Text style={{ flex: 1, color, fontSize: 10, lineHeight: 12 }} numberOfLines={2}>
+        {label}
+      </Text>
     </View>
   );
 }
