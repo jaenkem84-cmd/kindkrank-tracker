@@ -220,6 +220,7 @@ function RouteScreen({
         onAdd={() => onPush({ name: 'med-form' })}
         onEdit={(medicationId) => onPush({ name: 'med-form', medicationId })}
         onDose={(medicationId) => onPush({ name: 'dose-form', medicationId })}
+        onEditDose={(entryId) => onPush({ name: 'dose-form', entryId })}
       />
     );
   }

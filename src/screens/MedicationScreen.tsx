@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { BellIcon } from '../components/chrome';
 import { ReminderCard } from '../components/ReminderCard';
 import { Banner, Body, Button, Card, ConfirmDialog, DateTimeFields, Muted, Screen, TextField } from '../components/ui';
@@ -29,32 +29,88 @@ function warningText(name: string, assessment: DoseAssessment): string | null {
   return `${name}: ${parts.join(' ')} Diese Grenzen hast du selbst eingetragen.`;
 }
 
+const TILE = 196;
+
 export function MedicationScreen({
   now,
   onDose,
   onEdit,
+  onEditDose,
   onAdd,
 }: {
   now: Date;
   onDose: (id: string) => void;
   onEdit: (id: string) => void;
+  onEditDose: (id: string) => void;
   onAdd: () => void;
 }) {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
   const { data, activeChild } = useStore();
   const [sheetId, setSheetId] = useState<string | null>(null);
+  const [index, setIndex] = useState(0);
+  const [hidden, setHidden] = useState<string[]>([]);
+  const [gearOpen, setGearOpen] = useState(false);
+  const scroller = useRef<{ scrollTo: (options: { x: number; animated?: boolean }) => void } | null>(null);
+  const personId = activeChild?.id ?? '';
+  useEffect(() => {
+    setIndex(0);
+    setHidden([]);
+    setGearOpen(false);
+    scroller.current?.scrollTo({ x: 0, animated: false });
+  }, [personId]);
+
   if (!data || !activeChild) return <Body>Lege zuerst eine Person an.</Body>;
   const meds = forChild(data.medications, activeChild.id);
   const doses = forChild(data.doses, activeChild.id);
+  const slots = meds.length + 1;
+  const activeIndex = Math.max(0, Math.min(index, slots - 1));
+  const active = meds[activeIndex] ?? null;
   const sheetMed = meds.find((item) => item.id === sheetId) ?? null;
+  const side = Math.max(0, (width - TILE) / 2);
+  const listed = [...doses]
+    .filter((dose) => !hidden.includes(dose.medicationId))
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  const activeAssessment = active
+    ? assessDose({
+        doses: doses.filter((dose) => dose.medicationId === active.id),
+        minIntervalHours: active.minIntervalHours,
+        maxPer24h: active.maxDosesPer24h,
+        at: now,
+      })
+    : null;
+  const activeWarning = active && activeAssessment ? warningText(active.name, activeAssessment) : null;
+
+  function selectIndex(next: number) {
+    const clamped = Math.max(0, Math.min(slots - 1, next));
+    setIndex(clamped);
+    scroller.current?.scrollTo({ x: clamped * TILE, animated: true });
+  }
+
   return (
     <View style={{ flex: 1 }}>
-      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }}>
-        <Button label="Medikament anlegen" onPress={onAdd} />
+      <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+        <Button
+          label={active ? 'Gabe eintragen' : 'Medikament anlegen'}
+          onPress={() => (active ? onDose(active.id) : onAdd())}
+        />
       </View>
-      <View style={{ paddingHorizontal: 16, gap: 8, flex: 1 }}>
-        {meds.length === 0 ? <Body>Noch kein Medikament. Name, Dosis, Abstand und Maximum trägst du selbst ein.</Body> : null}
-        {meds.map((medication) => {
+      <ScrollView
+        ref={(node) => {
+          scroller.current = node;
+        }}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={TILE}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        disableIntervalMomentum
+        contentContainerStyle={{ paddingHorizontal: side, alignItems: 'center' }}
+        style={{ height: 172, marginTop: 8, flexShrink: 0 }}
+        onMomentumScrollEnd={(event) => selectIndex(Math.round(event.nativeEvent.contentOffset.x / TILE))}
+        onScrollEndDrag={(event) => selectIndex(Math.round(event.nativeEvent.contentOffset.x / TILE))}
+      >
+        {meds.map((medication, slot) => {
           const own = doses.filter((dose) => dose.medicationId === medication.id);
           const assessment = assessDose({
             doses: own,
@@ -63,48 +119,156 @@ export function MedicationScreen({
             at: now,
           });
           const reminder = data.reminders.find((item) => item.medicationId === medication.id && item.enabled);
-          const since = assessment.hoursSince === null ? 'noch keine Gabe' : shortSince(assessment.hoursSince);
+          const since = assessment.hoursSince === null ? 'noch keine Gabe' : formatSince(assessment.hoursSince);
+          const focused = slot === activeIndex;
+          return (
+            <View key={medication.id} style={{ width: TILE, alignItems: 'center', justifyContent: 'center', opacity: focused ? 1 : 0.45 }}>
+              <View
+                style={{
+                  width: focused ? 184 : 150,
+                  height: focused ? 148 : 120,
+                  borderRadius: 16,
+                  borderWidth: focused ? 2 : 1,
+                  borderColor: focused ? theme.accent : theme.border,
+                  backgroundColor: theme.card,
+                  paddingHorizontal: 10,
+                  paddingVertical: 8,
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Pressable accessibilityRole="button" accessibilityLabel={medication.name} accessibilityState={{ selected: focused }} onPress={() => (focused ? onEdit(medication.id) : selectIndex(slot))} style={{ gap: 1 }}>
+                  <Text style={{ color: theme.text, fontSize: focused ? 16 : 14, lineHeight: 20, fontWeight: '800' }} numberOfLines={2}>
+                    {medication.name}
+                  </Text>
+                  <Text style={{ color: theme.muted, fontSize: 13, lineHeight: 17 }} numberOfLines={1}>
+                    {medication.doseText}
+                  </Text>
+                  <Text style={{ color: focused ? theme.accent : theme.muted, fontSize: 13, lineHeight: 17 }} numberOfLines={1}>
+                    {since}
+                  </Text>
+                  <Text style={{ color: theme.muted, fontSize: 12, lineHeight: 16 }} numberOfLines={1}>
+                    heute {assessment.countToday}/{medication.maxDosesPer24h}
+                  </Text>
+                </Pressable>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={reminder ? 'Erinnerung an' : 'Erinnerung aus'}
+                    onPress={() => setSheetId(medication.id)}
+                    style={{ width: 40, height: 36, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <BellIcon color={reminder ? theme.accent : theme.muted} filled={Boolean(reminder)} />
+                  </Pressable>
+                  {focused ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Gabe eintragen"
+                      onPress={() => onDose(medication.id)}
+                      style={{ minWidth: 76, height: 34, borderRadius: 10, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Text style={{ color: theme.onAccent, fontSize: 14, fontWeight: '800' }}>+ Gabe</Text>
+                    </Pressable>
+                  ) : (
+                    <View style={{ width: 40 }} />
+                  )}
+                </View>
+              </View>
+            </View>
+          );
+        })}
+        <View style={{ width: TILE, alignItems: 'center', justifyContent: 'center', opacity: active ? 0.55 : 1 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Medikament anlegen"
+            onPress={onAdd}
+            style={{
+              width: active ? 150 : 184,
+              height: active ? 120 : 148,
+              borderRadius: 16,
+              borderWidth: active ? 1 : 2,
+              borderColor: theme.accent,
+              backgroundColor: theme.card,
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+            }}
+          >
+            <Text style={{ color: theme.accent, fontSize: 36, lineHeight: 40, fontWeight: '700' }}>+</Text>
+            <Text style={{ color: theme.text, fontSize: 14, fontWeight: '700' }}>Neu</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+      {activeWarning ? (
+        <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
+          <Banner tone="warning">{activeWarning}</Banner>
+        </View>
+      ) : null}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 4 }}>
+        <Text style={{ flex: 1, color: theme.text, fontSize: 16, fontWeight: '700' }}>Gaben</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Gaben filtern"
+          onPress={() => setGearOpen((open) => !open)}
+          style={{ width: 44, height: 36, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Text style={{ color: theme.text, fontSize: 18 }}>⚙</Text>
+        </Pressable>
+      </View>
+      {gearOpen ? (
+        <View style={{ marginHorizontal: 16, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 12, gap: 8, backgroundColor: theme.card }}>
+          <Text style={{ color: theme.text, fontWeight: '700' }}>In der Liste</Text>
+          {meds.length === 0 ? <Muted>Noch kein Medikament.</Muted> : null}
+          {meds.map((medication) => {
+            const on = !hidden.includes(medication.id);
+            return (
+              <Text
+                key={medication.id}
+                onPress={() => setHidden(on ? [...hidden, medication.id] : hidden.filter((id) => id !== medication.id))}
+                style={{ color: theme.text, fontSize: 15, lineHeight: 22, paddingVertical: 4 }}
+              >
+                {on ? '☑' : '☐'} {medication.name}
+              </Text>
+            );
+          })}
+        </View>
+      ) : null}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, gap: 8, paddingBottom: 28 }}>
+        {meds.length === 0 ? (
+          <Body>Noch kein Medikament. Name, Dosis, Abstand und Maximum trägst du selbst ein.</Body>
+        ) : listed.length === 0 ? (
+          <Body>Keine Gaben für diese Auswahl.</Body>
+        ) : null}
+        {listed.map((dose) => {
+          const medication = meds.find((item) => item.id === dose.medicationId);
+          const marked = active?.id === dose.medicationId;
           return (
             <View
-              key={medication.id}
+              key={dose.id}
               style={{
-                minHeight: 56,
+                minHeight: 52,
                 borderRadius: 12,
-                borderWidth: 1,
-                borderColor: theme.border,
+                borderWidth: marked ? 1.5 : 1,
+                borderColor: marked ? theme.accent : theme.border,
                 backgroundColor: theme.card,
                 flexDirection: 'row',
                 alignItems: 'center',
               }}
             >
-              <Pressable accessibilityRole="button" onPress={() => onEdit(medication.id)} style={{ flex: 1, paddingLeft: 12, paddingVertical: 8, minHeight: 56, justifyContent: 'center' }}>
-                <Text style={{ color: theme.text, fontSize: 16, lineHeight: 20, fontWeight: '700' }} numberOfLines={1}>
-                  {medication.name}
+              <Pressable accessibilityRole="button" accessibilityLabel="Gabe ändern" onPress={() => onEditDose(dose.id)} style={{ flex: 1, paddingLeft: 12, paddingVertical: 6, justifyContent: 'center' }}>
+                <Text style={{ color: marked ? theme.accent : theme.text, fontSize: 16, lineHeight: 20, fontWeight: '700' }} numberOfLines={1}>
+                  {medication?.name ?? 'Medikament'} · {dose.doseText}
                 </Text>
-                <Text style={{ color: theme.muted, fontSize: 13, lineHeight: 18 }} numberOfLines={1}>
-                  {since} · heute {assessment.countToday}/{medication.maxDosesPer24h}
+                <Text style={{ color: theme.muted, fontSize: 12, lineHeight: 16 }} numberOfLines={1}>
+                  {formatDateTime(new Date(dose.timestamp))} · {dose.givenBy}
                 </Text>
               </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={reminder ? 'Erinnerung an' : 'Erinnerung aus'}
-                onPress={() => setSheetId(medication.id)}
-                style={{ width: 44, height: 48, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <BellIcon color={reminder ? theme.accent : theme.muted} filled={Boolean(reminder)} />
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Gabe eintragen"
-                onPress={() => onDose(medication.id)}
-                style={{ minWidth: 72, height: 40, marginRight: 8, borderRadius: 10, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <Text style={{ color: theme.onAccent, fontSize: 14, fontWeight: '800' }}>+ Gabe</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="Ändern" onPress={() => onEditDose(dose.id)} style={{ width: 44, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: theme.muted, fontSize: 22, lineHeight: 24 }}>›</Text>
               </Pressable>
             </View>
           );
         })}
-      </View>
+      </ScrollView>
       {sheetMed ? (
         <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }]} onPress={() => setSheetId(null)}>
           <Pressable onPress={() => undefined} style={{ backgroundColor: theme.bg, borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 16, gap: 8, maxHeight: '86%' }}>
@@ -121,12 +285,6 @@ export function MedicationScreen({
       ) : null}
     </View>
   );
-}
-
-function shortSince(hours: number): string {
-  if (hours < 1) return formatSince(hours);
-  const rounded = Math.max(1, Math.round(hours));
-  return `vor ${rounded} h`;
 }
 
 export function MedicationForm({
