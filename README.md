@@ -16,8 +16,8 @@ Technisch: Expo SDK 58, React Native, TypeScript. Der erste Start legt Beispield
 4. Impfung: Handelsname aus einer kurzen Liste gängiger Präparate (Zusammensetzung laut Fachinformation, vom Paul-Ehrlich-Institut zu prüfen), Charge, Arzt, Notiz. Der Impfstatus orientiert sich am STIKO-Kalender im Epidemiologischen Bulletin 4/2026 und muss mit dem Bulletin des laufenden Jahres abgeglichen werden. Die Übersicht sagt erledigt, fällig, überfällig oder später und ist keine ärztliche Auskunft. „Für den Arzt“ lässt sich teilen. „Impfpass fotografieren“ nimmt ein Foto; Texterkennung auf dem Gerät gibt es erst in einem Entwicklungs-Build mit `@react-native-ml-kit/text-recognition`. Bis dahin tippst du den Text vom Etikett, derselbe Abgleich schlägt den Handelsnamen vor.
 5. Symptome mit Uhrzeit, optional leicht/mittel/stark und Notiz. Die Chips sind Husten, Schnupfen, Erbrechen, Durchfall, Ausschlag, Ohrenschmerzen, Halsschmerzen, Appetitlosigkeit, wenig getrunken, Müdigkeit/schlapp, Atemnot, Krampf, plus Freitext. Auf dem Temperaturdiagramm liegen sie als Punkte, abschaltbar. „Husten“ und „hat erbrochen“ versteht die Spracheingabe.
 6. Gewicht (kg), Größe (cm) und Kopfumfang (cm), jeweils mit Diagramm über das Alter. Jahre kräftig, Monate hell, Beschriftung standardmäßig alle 4 Monate. Darüber die WHO-Perzentile P3, P15, P50, P85 und P97, am rechten Rand beschriftet. Ein Tipp auf einen Messpunkt nennt den nahen Perzentilwert. Zeitraum 1 Jahr, 2 Jahre oder 5 Jahre direkt am Diagramm.
-7. Große Spracheingabe auf dem Startbildschirm. Der Parser versteht zum Beispiel „Anna 38,5“, „Temperatur jetzt 38,2“, „vor 15 Minuten 37,3 Grad“, „Ibuprofen gegeben“, „Gewicht 9,6 Kilo“. In der APK liest die App den Eintrag vor und speichert nach etwa drei Sekunden oder auf „ja“. In Snack und Expo Go tippst du den Satz; das Mikrofon läuft dort nicht.
-8. Deep Link `kindkrank://voice` öffnet direkt die Spracheingabe und hört in der APK sofort zu. Icon lang drücken: Verknüpfung **Spracheingabe**. „Hey Google“ ist auf Deutsch 2026 nicht zuverlässig, siehe unten.
+7. Große Spracheingabe auf dem Startbildschirm. Der Parser versteht zum Beispiel „Anna 38,5“, „Temperatur jetzt 38,2“, „vor 15 Minuten 37,3 Grad“, „Ibuprofen gegeben“, „Gewicht 9,6 Kilo“. In der APK wird ein erkannter Eintrag sofort gespeichert, vorgelesen, und fünf Sekunden lang kann „rückgängig“ ihn zurücknehmen. In Snack und Expo Go tippst du den Satz; das Mikrofon läuft dort nicht.
+8. Deep Link `kindkrank://voice` öffnet direkt die Spracheingabe und hört in der APK sofort zu. Nach einem neuen APK-Build liegt neben **Familien-Gesundheit** ein zweites Icon **FamCare Voice**. „Hey Google, öffne FamCare Voice“ startet das Zuhören. Das bisherige Icon bleibt.
 9. Speicher hinter einer Repository-Schnittstelle. Dieser Prototyp speichert lokal (AsyncStorage). Kein Konto, kein API-Schlüssel. Der Plan für einen Familien-Einladungslink steht weiter unten.
 10. In den Einstellungen exportierst du **alle** Daten als ZIP mit einer CSV pro Tabelle, einschließlich Impfungen und Symptome (Semikolon, UTF-8 mit BOM). Ohne Wochenfilter.
 11. Startseite wie ein Tagesbuch: Name und Alter in Wochen und Tagen, Profilbild mit Rahmenfarbe, Tag vor und zurück, Zähler für den Tag, unten die Leiste Temperatur, Medikation, Impfung, Symptome, Gewicht, Größe, Kopfumfang. Hamburger-Menü: Alarme, Familie, Export und Einstellungen. Kein eigener Punkt Analyse und keine zentrale Erinnerungsliste. Erinnerungen sitzen bei Temperatur und bei jedem Medikament. Auf dem Handy sind das lokale Mitteilungen. Im Browser werden sie nur gespeichert.
@@ -97,7 +97,7 @@ Der Build läuft auf den Servern von Expo. Am Ende erscheint ein Link und ein QR
 
 1. Den Link auf dem Android-Handy öffnen und die APK laden.
 2. Installation aus dieser Quelle erlauben, falls Android fragt.
-3. Die App heißt **Familien-Gesundheit** und liegt neben Expo Go. Expo Go nicht deinstallieren.
+3. Die App heißt **Familien-Gesundheit** und liegt neben Expo Go. Expo Go nicht deinstallieren. Daneben erscheint **FamCare Voice**. Dafür ist dieser neue APK-Build nötig. Ein älteres APK hat das zweite Icon nicht.
 4. Beim ersten Spracheingabe-Start einmal **Mikrofon erlauben**. Diese eine Rückfrage lässt sich nicht überspringen. Danach nicht mehr.
 
 Prüfen, dass der Deep Link die Spracheingabe öffnet (Handy per USB, USB-Debugging an):
@@ -110,9 +110,9 @@ Die App muss direkt „Ich höre zu“ zeigen.
 
 ## Freihändige Spracheingabe
 
-Beispiel, beide Hände am Thermometer: „Anna 38,5“. Die App liest vor: „Anna, 38,5 Grad rektal, 1:52 Uhr. Speichern?“ Nach etwa drei Sekunden Stille speichert sie. Vorher „ja“ oder „speichern“ speichert sofort, „nein“ oder „abbrechen“ verwirft, „rückgängig“ nimmt den letzten Eintrag dieser Sitzung zurück, „beenden“ schließt die Spracheingabe. Der Bildschirm bleibt an. Ein kurzer Ton und eine Vibration markieren Zuhören, Speichern und Abbruch.
+Beispiel, beide Hände am Thermometer: „Anna 38,5“. Die App speichert sofort und liest vor: „Eingetragen: 15.11.2026, 21:42 Uhr, 38,5 °C“. Etwa fünf Sekunden lang zeigt sie **Rückgängig**. „rückgängig“ nimmt den Eintrag zurück, danach hört sie wieder zu. „beenden“ schließt die Spracheingabe. Der Bildschirm bleibt an. Ein kurzer Ton und eine Vibration markieren Zuhören, Speichern und Abbruch.
 
-Eine Grenze bei einem Medikament wird nicht automatisch gespeichert. Dann sagt die App den Grund, und „trotzdem“ speichert bewusst darüber hinweg.
+Eine Grenze bei einem Medikament wird nicht automatisch gespeichert. Die App fragt laut, zum Beispiel „Ibuprofen wäre die vierte Gabe in 24 Stunden. Trotzdem eintragen?“ oder „Der Mindestabstand von 6 Stunden ist noch nicht erreicht. Trotzdem eintragen?“, und hört danach zu. „ja“ oder „trotzdem“ speichert, „nein“ verwirft. Tippen ist dafür nicht nötig.
 
 In Expo Go und ohne Mikrofon bleibt das Textfeld. **Auswerten** nutzt denselben Parser und dieselbe Ansage. Dort tippt man Speichern oder Abbrechen.
 
@@ -130,20 +130,22 @@ Stand November 2026, nach der Dokumentation von Android App Actions und den öff
 
 - `actions.intent.OPEN_APP_FEATURE` ist die eingebaute App-Action, um eine Funktion zu öffnen. Die dokumentierten Sprachen dafür sind Englisch (mehrere Regionen), Spanisch (Spanien) und Portugiesisch (Brasilien). **Deutsch ist nicht dabei.** Custom Intents sind nur `en-US`.
 - Die APK enthält die Capability trotzdem, mit den Funktionsnamen Spracheingabe, Sprache, voice input, voice und speech input, erfüllt über `kindkrank://voice`. Das schreibt `plugins/withVoiceShortcut.js`.
-- Gemini als Standard-Assistent öffnet auf „Hey Google, öffne Familien-Gesundheit“ die App, übergibt die Funktion aber oft nicht. Die Spracheingabe startet dann nicht. Zurückschalten auf den klassischen Assistant stellt das nach Berichten aus 2025 nicht zuverlässig wieder her.
-- Eine statische App-Verknüpfung **öffnet der Assistent nicht verlässlich nur wegen ihres Namens.** Lang drücken auf das Icon ist zuverlässig.
+- „Hey Google, öffne …“ öffnet auf Deutsch zuverlässig eine App, deren Launcher-Name genau so heißt. Die APK enthält dafür einen zweiten, exportierten Launcher: die Activity-Alias `.VoiceLauncher` mit dem Namen **FamCare Voice**. Sie startet dieselbe App, setzt den Intent auf `kindkrank://voice` und hört sofort zu. Das Icon **Familien-Gesundheit** bleibt unverändert.
+- Gemini übergibt eine Funktion innerhalb derselben App oft nicht. Deshalb ist das zweite Icon der Weg, nicht ein Parameter an „öffne Familien-Gesundheit“.
+- Eine statische App-Verknüpfung **öffnet der Assistent nicht verlässlich nur wegen ihres Namens.** Lang drücken auf das Icon bleibt der Weg ohne neuen Build.
 
 Was auf dem Handy verlässlich ist:
 
-1. App-Icon lang drücken → **Spracheingabe**. Danach kein Tippen mehr. Die Kachel kann auf den Startbildschirm gezogen werden.
-2. Diese Sätze nach der Installation ausprobieren. Es kann ein paar Stunden dauern, bis Google die Verknüpfung indexiert, und ein Neustart hilft manchmal:
+1. **Neues Preview-APK installieren.** Erst dann gibt es das Icon **FamCare Voice**. „Hey Google, öffne FamCare Voice“ startet das Zuhören. Das Icon kann auf den Startbildschirm.
+2. Ohne dieses APK: Icon **Familien-Gesundheit** lang drücken → **Spracheingabe**. Danach kein Tippen mehr. Die Kachel kann auf den Startbildschirm gezogen werden.
+3. Diese Sätze nach der Installation ausprobieren. Es kann ein paar Stunden dauern, bis Google die Verknüpfung indexiert, und ein Neustart hilft manchmal:
    - „Hey Google, öffne Familien-Gesundheit Spracheingabe“
    - „Hey Google, Spracheingabe in Familien-Gesundheit“
    - „Hey Google, öffne Spracheingabe“
-3. Nur wenn die Assistant-Sprache Englisch ist, zusätzlich: „Hey Google, open voice input on Familien-Gesundheit“ und „Hey Google, open Familien-Gesundheit voice input“.
-4. Routine, wenn der Aktionspicker eine Verknüpfung anbietet: Google-App oder Gemini → Einstellungen → Routinen. Auslöser genau „Spracheingabe für Familien-Gesundheit“. Aktion: die Verknüpfung **Spracheingabe** von Familien-Gesundheit, nicht nur „App öffnen“. „App öffnen“ landet auf dem Startbildschirm. Danach: „Hey Google, starte Spracheingabe für Familien-Gesundheit“. Gemini führt nicht jede Routinen-Aktion aus und sagt das dann.
+4. Nur wenn die Assistant-Sprache Englisch ist, zusätzlich: „Hey Google, open voice input on Familien-Gesundheit“ und „Hey Google, open Familien-Gesundheit voice input“.
+5. Routine, wenn der Aktionspicker eine Verknüpfung anbietet: Google-App oder Gemini → Einstellungen → Routinen. Auslöser genau „Spracheingabe für Familien-Gesundheit“. Aktion: die Verknüpfung **Spracheingabe** von Familien-Gesundheit, nicht nur „App öffnen“. „App öffnen“ landet auf dem Startbildschirm. Danach: „Hey Google, starte Spracheingabe für Familien-Gesundheit“. Gemini führt nicht jede Routinen-Aktion aus und sagt das dann.
 
-iOS, nachrangig: `plugins/withVoiceIntent.js` legt beim iOS-Build einen App Intent und einen Siri-Kurzbefehl „Spracheingabe“ an. Siri-Sätze müssen den App-Namen enthalten, also „Spracheingabe in Familien-Gesundheit“. Zuverlässiger auf dem iPhone ist ein eigener Kurzbefehl: Aktion „URL öffnen“ mit `kindkrank://voice`, zu Siri hinzufügen. Der Android-Build hängt nicht an dieser Datei.
+iOS, nachrangig: `plugins/withVoiceIntent.js` legt beim iOS-Build einen App Intent und einen Siri-Kurzbefehl **FamCare Voice** an. Siri-Sätze müssen den App-Namen enthalten, also „FamCare Voice in Familien-Gesundheit“. Zuverlässiger auf dem iPhone ist ein eigener Kurzbefehl: Aktion „URL öffnen“ mit `kindkrank://voice`, zu Siri hinzufügen. Der Android-Build hängt nicht an dieser Datei.
 
 ## Supabase für die Familie
 

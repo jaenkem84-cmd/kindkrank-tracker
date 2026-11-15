@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { AndroidConfig, withAndroidManifest, withDangerousMod } = require('@expo/config-plugins');
+const { AndroidConfig, withAndroidManifest, withDangerousMod, withMainActivity } = require('@expo/config-plugins');
 
 const META_NAME = 'android.app.shortcuts';
 
@@ -52,10 +52,81 @@ function buildFeatureSynonymsXml() {
 `;
 }
 
+const ALIAS_NAME = '.VoiceLauncher';
+
+function ensureVoiceAlias(application) {
+  const aliases = application['activity-alias'] ?? [];
+  const alias = {
+    $: {
+      'android:name': ALIAS_NAME,
+      'android:targetActivity': '.MainActivity',
+      'android:exported': 'true',
+      'android:enabled': 'true',
+      'android:launchMode': 'singleTask',
+      'android:label': '@string/voice_launcher_name',
+      'android:icon': '@mipmap/ic_launcher_voice',
+      'android:roundIcon': '@mipmap/ic_launcher_voice',
+    },
+    'intent-filter': [
+      {
+        action: [{ $: { 'android:name': 'android.intent.action.MAIN' } }],
+        category: [{ $: { 'android:name': 'android.intent.category.LAUNCHER' } }],
+      },
+    ],
+  };
+  const index = aliases.findIndex((item) => item.$?.['android:name'] === ALIAS_NAME);
+  if (index >= 0) aliases[index] = alias;
+  else aliases.push(alias);
+  application['activity-alias'] = aliases;
+  return application;
+}
+
+function patchMainActivity(contents) {
+  if (contents.includes('fun openVoiceWhenAlias')) return contents;
+  let next = contents;
+  if (!next.includes('import android.content.Intent')) {
+    next = next.replace(/package [^\n]+\n/, (line) => `${line}\nimport android.content.Intent\nimport android.net.Uri\n`);
+  } else if (!next.includes('import android.net.Uri')) {
+    next = next.replace('import android.content.Intent', 'import android.content.Intent\nimport android.net.Uri');
+  }
+  const helper = `
+  private fun openVoiceWhenAlias(intent: Intent?) {
+    val name = intent?.component?.className ?: return
+    if (!name.endsWith(".VoiceLauncher")) return
+    if (intent.data != null) return
+    intent.action = Intent.ACTION_VIEW
+    intent.data = Uri.parse("kindkrank://voice")
+  }
+`;
+  next = next.replace(
+    /override fun onCreate\(savedInstanceState: Bundle\?\) \{\n/,
+    'override fun onCreate(savedInstanceState: Bundle?) {\n    openVoiceWhenAlias(intent)\n',
+  );
+  if (next.includes('override fun onNewIntent')) {
+    next = next.replace(
+      /override fun onNewIntent\(intent: Intent\) \{\n/,
+      'override fun onNewIntent(intent: Intent) {\n    openVoiceWhenAlias(intent)\n',
+    );
+  } else {
+    const end = next.lastIndexOf('}');
+    next =
+      next.slice(0, end) +
+      helper +
+      '\n  override fun onNewIntent(intent: Intent) {\n    openVoiceWhenAlias(intent)\n    super.onNewIntent(intent)\n  }\n' +
+      next.slice(end);
+  }
+  if (!next.includes('fun openVoiceWhenAlias')) {
+    const end = next.lastIndexOf('}');
+    next = next.slice(0, end) + helper + next.slice(end);
+  }
+  return next;
+}
+
 function upsertStrings(xml) {
   const lines = [
     ['shortcut_voice_short', 'Spracheingabe'],
     ['shortcut_voice_long', 'Spracheingabe starten'],
+    ['voice_launcher_name', 'FamCare Voice'],
   ];
   let next = xml;
   for (const [name, value] of lines) {
@@ -78,6 +149,7 @@ function withVoiceShortcut(config) {
       const name = item.$?.['android:name'] ?? '';
       return name === '.MainActivity' || name.endsWith('.MainActivity');
     });
+    ensureVoiceAlias(application);
     if (!activity) return mod;
     const meta = activity['meta-data'] ?? [];
     if (!meta.some((item) => item.$?.['android:name'] === META_NAME)) {
@@ -88,6 +160,13 @@ function withVoiceShortcut(config) {
         },
       });
       activity['meta-data'] = meta;
+    }
+    return mod;
+  });
+
+  config = withMainActivity(config, (mod) => {
+    if (mod.modResults.language === 'kt') {
+      mod.modResults.contents = patchMainActivity(mod.modResults.contents);
     }
     return mod;
   });
@@ -103,6 +182,35 @@ function withVoiceShortcut(config) {
       const valuesDir = path.join(resDir, 'values');
       fs.mkdirSync(valuesDir, { recursive: true });
       fs.writeFileSync(path.join(valuesDir, 'voice_features.xml'), buildFeatureSynonymsXml());
+      const icon = path.join(mod.modRequest.projectRoot, 'assets/voice-launcher.png');
+      const foreground = path.join(mod.modRequest.projectRoot, 'assets/voice-launcher-foreground.png');
+      const mipmap = path.join(resDir, 'mipmap-xxxhdpi');
+      fs.mkdirSync(mipmap, { recursive: true });
+      if (fs.existsSync(icon)) fs.copyFileSync(icon, path.join(mipmap, 'ic_launcher_voice.png'));
+      const anydpi = path.join(resDir, 'mipmap-anydpi-v26');
+      fs.mkdirSync(anydpi, { recursive: true });
+      fs.writeFileSync(
+        path.join(anydpi, 'ic_launcher_voice.xml'),
+        `<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/voice_launcher_background"/>
+    <foreground android:drawable="@drawable/ic_launcher_voice_foreground"/>
+</adaptive-icon>
+`,
+      );
+      const drawable = path.join(resDir, 'drawable');
+      fs.mkdirSync(drawable, { recursive: true });
+      if (fs.existsSync(foreground)) fs.copyFileSync(foreground, path.join(drawable, 'ic_launcher_voice_foreground.png'));
+      const colorsPath = path.join(valuesDir, 'colors.xml');
+      const colorLine = '<color name="voice_launcher_background">#0E6B68</color>';
+      if (!fs.existsSync(colorsPath)) {
+        fs.writeFileSync(colorsPath, `<resources>\n    ${colorLine}\n</resources>\n`);
+      } else {
+        const colors = fs.readFileSync(colorsPath, 'utf8');
+        if (!colors.includes('voice_launcher_background')) {
+          fs.writeFileSync(colorsPath, colors.replace('</resources>', `    ${colorLine}\n</resources>`));
+        }
+      }
       const stringsPath = path.join(valuesDir, 'strings.xml');
       if (!fs.existsSync(stringsPath)) {
         fs.writeFileSync(stringsPath, upsertStrings('<resources>\n</resources>\n'));
@@ -119,3 +227,5 @@ function withVoiceShortcut(config) {
 module.exports = withVoiceShortcut;
 module.exports.buildShortcutsXml = buildShortcutsXml;
 module.exports.buildFeatureSynonymsXml = buildFeatureSynonymsXml;
+module.exports.ensureVoiceAlias = ensureVoiceAlias;
+module.exports.patchMainActivity = patchMainActivity;

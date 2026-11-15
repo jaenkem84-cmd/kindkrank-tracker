@@ -17,9 +17,9 @@ import {
   type Medication,
   type TemperatureEntry,
 } from '../domain/types';
+import { limitQuestion } from '../domain/voice/spoken';
 import { interpretUtterance } from '../domain/voice';
 import { matchVoiceCommand } from '../domain/voice/commands';
-import { speakWhen, spokenSavePrompt } from '../domain/voice/spoken';
 import type { ParseContext } from '../domain/voice/types';
 import { saveDose, saveGrowth, saveMedication, saveSymptom, saveTemperature, removeDose, removeGrowth, removeMedication, removeSymptom, removeTemperature } from '../data/mutations';
 import type { SymptomEntry } from '../domain/types';
@@ -162,7 +162,6 @@ export function VoiceScreen({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<Block>(null);
-  const [countdown, setCountdown] = useState<number | null>(preview === 'confirm' ? 3 : null);
   const [hasUndo, setHasUndo] = useState(false);
   const [pendingDose, setPendingDose] = useState<{ dose: DoseEntry; medication: Medication | null } | null>(null);
   const session = useRef<SpeechSession | null>(null);
@@ -171,7 +170,6 @@ export function VoiceScreen({
   const phaseRef = useRef<Phase>(phase);
   const draftRef = useRef<Draft | null>(draft);
   const dataRef = useRef(data);
-  const countdownRef = useRef<number | null>(countdown);
   const undoRef = useRef<UndoBag | null>(null);
   const sourceRef = useRef('');
   const misses = useRef(0);
@@ -183,14 +181,11 @@ export function VoiceScreen({
   blockedRef.current = blocked;
   draftRef.current = draft;
   dataRef.current = data;
-  countdownRef.current = countdown;
   useKeepAwake('kindkrank-voice');
 
   function clearTimers() {
     for (const id of timers.current) clearInterval(id);
     timers.current = [];
-    countdownRef.current = null;
-    setCountdown(null);
     if (returnTimer.current) {
       clearTimeout(returnTimer.current);
       returnTimer.current = null;
@@ -262,7 +257,7 @@ export function VoiceScreen({
         onEnd: () => {
           if (generation.current !== token) return;
           setListening(false);
-          if (phaseRef.current === 'confirm' && countdownRef.current !== null) void beginListen(true);
+          if (phaseRef.current === 'clarify') void beginListen(true);
         },
       },
       { hints: hints() },
@@ -284,6 +279,7 @@ export function VoiceScreen({
       return;
     }
     if (fromSaved) {
+      setPartial('');
       phaseRef.current = 'listening';
       setPhase('listening');
     }
@@ -328,26 +324,6 @@ export function VoiceScreen({
     setPhase('typing');
   }
 
-  function armCountdown() {
-    clearTimers();
-    countdownRef.current = 3;
-    setCountdown(3);
-    let left = 3;
-    const id = setInterval(() => {
-      left -= 1;
-      if (left <= 0) {
-        clearInterval(id);
-        countdownRef.current = null;
-        setCountdown(null);
-        void commitRef.current(false);
-      } else {
-        countdownRef.current = left;
-        setCountdown(left);
-      }
-    }, 1000);
-    timers.current.push(id);
-  }
-
   function buildContext(): ParseContext | null {
     const current = dataRef.current;
     if (!current) return null;
@@ -390,8 +366,6 @@ export function VoiceScreen({
     if (!current) return;
     wipe();
     applyDraft(next);
-    const person = current.children.find((child) => child.id === next.childId)?.name ?? '';
-    const when = speakWhen(next.date, next.time, dateFieldValue(new Date()));
     if (ambiguous || !next.childId) {
       const names = current.children.map((child) => child.name).join(', ');
       const question = names ? `Welche Person ist gemeint? ${names}.` : 'Welche Person ist gemeint?';
@@ -423,19 +397,22 @@ export function VoiceScreen({
               at: whenDate,
             })
           : null;
-      const reason = [
-        assessment?.tooSoon ? 'Der Mindestabstand ist noch nicht um.' : null,
-        assessment?.exceedsMax ? 'Die Höchstzahl in 24 Stunden wäre überschritten.' : null,
-      ]
-        .filter(Boolean)
-        .join(' ');
+      const question =
+        medication && assessment
+          ? limitQuestion({
+              medicationName: medication.name,
+              minIntervalHours: medication.minIntervalHours,
+              nextCount: assessment.count24h + 1,
+              tooSoon: assessment.tooSoon,
+              exceedsMax: assessment.exceedsMax,
+            })
+          : 'Die eingegebene Grenze wäre überschritten. Trotzdem eintragen?';
       phaseRef.current = 'clarify';
       setPhase('clarify');
       setBlocked('limit');
-      setError(reason || 'Prüf die Angabe.');
-      setSpoken(`${person}, ${detailFor(next, current)}. ${reason} Sag trotzdem oder abbrechen.`);
-      await speakGerman(spokenLine(person, detailFor(next, current), reason || 'Prüf die Angabe.'));
-      if (phaseRef.current === 'clarify') void beginListen(true);
+      setError(question);
+      await speakGerman(question);
+      if (phaseRef.current === 'clarify' && !previewRef.current) void beginListen(true);
       return;
     }
     if (!canAutoSave(next, current)) {
@@ -445,16 +422,7 @@ export function VoiceScreen({
       setError('Prüf die Angabe, bevor sie gespeichert wird.');
       return;
     }
-    const prompt = spokenSavePrompt(person, detailFor(next, current), when);
-    phaseRef.current = 'confirm';
-    setPhase('confirm');
-    setBlocked(null);
-    setSpoken(prompt);
-    setError(null);
-    await speakGerman(prompt);
-    if (phaseRef.current !== 'confirm' || previewRef.current) return;
-    armCountdown();
-    void beginListen(true);
+    await commitRef.current(false);
   }
 
   async function interpret(raw = text) {
@@ -570,15 +538,11 @@ export function VoiceScreen({
       await undo();
       return;
     }
-    if (currentPhase === 'confirm' && (command === 'save' || command === 'anyway')) {
-      await commitRef.current(false);
-      return;
-    }
     if ((currentPhase === 'confirm' || currentPhase === 'clarify') && command === 'cancel') {
       await discard();
       return;
     }
-    if (currentPhase === 'clarify' && (command === 'anyway' || (command === 'save' && blockedRef.current === 'limit'))) {
+    if (currentPhase === 'clarify' && blockedRef.current === 'limit' && (command === 'anyway' || command === 'save')) {
       await commitRef.current(true);
       return;
     }
@@ -710,13 +674,14 @@ export function VoiceScreen({
       const overridden = assessment.tooSoon || assessment.exceedsMax;
       if (overridden && !force) {
         saving.current = false;
-        const reason = [
-          assessment.tooSoon ? 'Der Mindestabstand ist noch nicht um.' : null,
-          assessment.exceedsMax ? 'Die Höchstzahl in 24 Stunden wäre überschritten.' : null,
-        ]
-          .filter(Boolean)
-          .join(' ');
-        setError(`${medication.name}: ${reason}`);
+        const question = limitQuestion({
+          medicationName: medication.name,
+          minIntervalHours: medication.minIntervalHours,
+          nextCount: assessment.count24h + 1,
+          tooSoon: assessment.tooSoon,
+          exceedsMax: assessment.exceedsMax,
+        });
+        setError(question);
         setPendingDose({
           dose: {
             id: createId('gabe'),
@@ -734,7 +699,8 @@ export function VoiceScreen({
         phaseRef.current = 'clarify';
         setPhase('clarify');
         setBlocked('limit');
-        await speakGerman(`${reason} Sag trotzdem oder abbrechen.`);
+        await speakGerman(question);
+        if (phaseRef.current === 'clarify' && !previewRef.current) void beginListen(true);
         return;
       }
       const dose: DoseEntry = {
@@ -765,9 +731,9 @@ export function VoiceScreen({
     setPhase('saved');
     saving.current = false;
     await playCue('saved');
-    void speakGerman('Gespeichert.');
+    void speakGerman(line);
     if (previewRef.current) return;
-    armReturn(3500, () => {
+    armReturn(5000, () => {
       if (phaseRef.current !== 'saved') return;
       stopSpeaking();
       if (support === 'none') {
@@ -882,19 +848,33 @@ export function VoiceScreen({
       setPhase('unavailable');
       return;
     }
+    const medication = data.medications.find((item) => item.name.startsWith('Ibuprofen'));
     const next: Draft = {
-      kind: 'temperature',
+      kind: 'dose',
       childId: data.children.find((child) => child.name === 'Anna')?.id ?? data.children[0]?.id ?? '',
-      celsius: '38,5',
-      method: 'rektal',
+      medicationId: medication?.id ?? null,
+      query: 'Ibuprofen',
+      candidates: [],
+      doseText: '60 mg',
+      givenBy: 'Michael',
+      interval: '',
+      max: '',
       date: '15.11.2026',
       time: '21:42',
     };
     applyDraft(next);
-    phaseRef.current = 'confirm';
-    setPhase('confirm');
-    setCountdown(3);
-    countdownRef.current = 3;
+    phaseRef.current = 'clarify';
+    setPhase('clarify');
+    setBlocked('limit');
+    setError(
+      limitQuestion({
+        medicationName: medication?.name ?? 'Ibuprofen',
+        minIntervalHours: medication?.minIntervalHours ?? 6,
+        nextCount: 4,
+        tooSoon: false,
+        exceedsMax: true,
+      }),
+    );
   }, [preview, data]);
 
   useEffect(() => {
@@ -993,12 +973,9 @@ export function VoiceScreen({
             </View>
           ) : (
             <>
-              <View style={{ height: 8, borderRadius: 4, backgroundColor: theme.border, overflow: 'hidden' }}>
-                <View style={{ height: 8, width: `${((countdown ?? 3) / 3) * 100}%`, backgroundColor: theme.accent }} />
-              </View>
-              <Text style={{ color: theme.muted, textAlign: 'center' }}>{countdown ?? 3}</Text>
-              <Button label="Speichern" onPress={() => void commit(blocked === 'limit')} />
+              <Button label="Speichern" onPress={() => void commit(true)} />
               <Button label="Verwerfen" variant="secondary" onPress={() => void discard()} />
+              <Muted>Sag ja, trotzdem oder nein.</Muted>
             </>
           )}
         </View>
@@ -1060,7 +1037,7 @@ export function VoiceScreen({
       {helpOpen ? (
         <View style={{ marginTop: 16, borderRadius: 14, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card, padding: 14, gap: 8 }}>
           <Text style={{ color: theme.text, fontWeight: '700' }}>Sprachbefehle</Text>
-          <Muted>ja oder speichern, nein oder verwerfen, trotzdem bei einer Grenze, rückgängig, beenden.</Muted>
+          <Muted>Bei einer Grenze fragt die App nach. ja oder trotzdem trägt ein, nein verwirft. rückgängig macht den letzten Eintrag rückgängig.</Muted>
           <Button label="Schließen" variant="secondary" onPress={() => setHelpOpen(false)} />
         </View>
       ) : null}
@@ -1085,8 +1062,4 @@ function confirmationLine(draft: Draft, data: AppData): string {
   if (draft.kind === 'growth') return `Eingetragen: ${clock}, ${detailFor(draft, data)}`;
   const medication = data.medications.find((item) => item.id === draft.medicationId);
   return `Eingetragen: ${clock}, ${medication?.name ?? draft.query} ${draft.doseText}`.replace(/\s+/g, ' ');
-}
-
-function spokenLine(person: string, detail: string, reason: string): string {
-  return [person, detail, reason, 'Sag trotzdem oder abbrechen.'].filter(Boolean).join('. ');
 }

@@ -6,7 +6,7 @@ const SWIFT = `import AppIntents
 import UIKit
 
 struct SpracheingabeIntent: AppIntent {
-  static var title: LocalizedStringResource = "Spracheingabe"
+  static var title: LocalizedStringResource = "FamCare Voice"
   static var description = IntentDescription("Öffnet die Spracheingabe, hört zu und liest den Eintrag vor.")
   static var openAppWhenRun: Bool = true
 
@@ -24,10 +24,11 @@ struct KindkrankShortcuts: AppShortcutsProvider {
     AppShortcut(
       intent: SpracheingabeIntent(),
       phrases: [
-        "Spracheingabe in \\(.applicationName)",
-        "Öffne Spracheingabe in \\(.applicationName)"
+        "FamCare Voice in \\(.applicationName)",
+        "Öffne FamCare Voice in \\(.applicationName)",
+        "Spracheingabe in \\(.applicationName)"
       ],
-      shortTitle: "Spracheingabe",
+      shortTitle: "FamCare Voice",
       systemImageName: "mic.fill"
     )
   }
@@ -60,3 +61,4 @@ function withVoiceIntent(config) {
 }
 
 module.exports = withVoiceIntent;
+module.exports.SWIFT = SWIFT;

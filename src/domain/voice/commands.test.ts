@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { matchVoiceCommand } from './commands';
-import { speakClock, spokenSavePrompt, temperatureDetail } from './spoken';
+import { limitQuestion, speakClock, spokenSavePrompt, temperatureDetail } from './spoken';
 
 describe('Sprachbefehle', () => {
   it('erkennt ja, speichern, nein, abbrechen und rückgängig', () => {
@@ -27,5 +27,13 @@ describe('Vorlesen', () => {
     assert.equal(detail, '38,5 Grad rektal');
     assert.equal(speakClock('01:52'), '1:52 Uhr');
     assert.equal(spokenSavePrompt('Anna', detail, '1:52 Uhr'), 'Anna, 38,5 Grad rektal, 1:52 Uhr. Speichern?');
+    assert.equal(
+      limitQuestion({ medicationName: 'Ibuprofen', minIntervalHours: 6, nextCount: 4, tooSoon: false, exceedsMax: true }),
+      'Ibuprofen wäre die vierte Gabe in 24 Stunden. Trotzdem eintragen?',
+    );
+    assert.equal(
+      limitQuestion({ medicationName: 'Ibuprofen', minIntervalHours: 6, nextCount: 2, tooSoon: true, exceedsMax: false }),
+      'Der Mindestabstand von 6 Stunden ist noch nicht erreicht. Trotzdem eintragen?',
+    );
   });
 });
